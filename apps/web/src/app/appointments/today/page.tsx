@@ -1,6 +1,11 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 
+interface PatientRow {
+  id: string; first_name: string; last_name: string
+  mobile: string; gender: string; date_of_birth: string
+}
+
 export default async function TodaysSchedule() {
   const supabase = createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -34,7 +39,7 @@ export default async function TodaysSchedule() {
         <div className="flex items-center gap-3">
           <a href="/dashboard/doctor" className="text-gray-400 hover:text-gray-600 text-sm">← Dashboard</a>
           <span className="font-semibold text-gray-900">
-            Today's Schedule — {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
+            Today&apos;s Schedule — {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
           </span>
         </div>
         <span className="text-sm text-gray-500">{appointments?.length ?? 0} appointment{appointments?.length !== 1 ? 's' : ''}</span>
@@ -44,7 +49,7 @@ export default async function TodaysSchedule() {
           <div className="card p-8 text-center text-sm text-gray-400">No appointments today.</div>
         ) : (
           appointments.map(appt => {
-            const patient = appt.patient as { id: string; first_name: string; last_name: string; mobile: string; gender: string; date_of_birth: string } | null
+            const patient = (appt.patient as unknown) as PatientRow | null
             const age = patient?.date_of_birth
               ? Math.floor((Date.now() - new Date(patient.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
               : null
@@ -61,7 +66,7 @@ export default async function TodaysSchedule() {
                       {patient ? `${patient.first_name} ${patient.last_name}` : 'Unknown'}
                     </p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      {age && <span className="text-xs text-gray-500">{age}y · {patient?.gender}</span>}
+                      {age !== null && <span className="text-xs text-gray-500">{age}y · {patient?.gender}</span>}
                       {appt.type === 'TELECONSULT' && (
                         <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">💻 Teleconsult</span>
                       )}
