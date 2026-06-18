@@ -4,7 +4,7 @@ import {
 } from 'react-native'
 import { supabase } from '../lib/supabase'
 
-type VerificationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | null
+type VerificationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | null
 
 export default function PendingApprovalScreen() {
   const [status, setStatus] = useState<VerificationStatus>(null)
@@ -51,7 +51,7 @@ export default function PendingApprovalScreen() {
       bg: '#fde8e8',
       msg: 'Unfortunately your credentials could not be verified. Please contact support at support@ayushpathi.in for more information.',
     },
-    VERIFIED: {
+    APPROVED: {
       icon: '✅',
       title: 'Account Verified',
       color: '#1a6b3a',
@@ -164,3 +164,4 @@ const styles = StyleSheet.create({
   signOutBtn: { alignItems: 'center', padding: 12 },
   signOutText: { color: '#888', fontSize: 14 },
 })
+
