@@ -1,5 +1,5 @@
 {
-  "installCommand": "cd ../.. && pnpm install --filter web...",
+  "installCommand": "corepack enable && corepack prepare pnpm@8.15.0 --activate && cd ../.. && pnpm install --filter web...",
   "buildCommand": "cd ../.. && pnpm --filter web build",
   "outputDirectory": ".next",
   "framework": "nextjs"
