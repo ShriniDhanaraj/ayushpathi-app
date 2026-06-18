@@ -25,6 +25,11 @@ const COUNCILS = [
   'Other State Medical Council',
 ]
 
+const FRIENDLY_ERRORS: Record<string, string> = {
+  'User already registered': 'An account with this email already exists. Please sign in.',
+  'Password should be at least 6 characters': 'Password must be at least 8 characters.',
+}
+
 interface FormData {
   first_name: string; last_name: string; gender: string; mobile: string
   email: string; password: string
@@ -43,15 +48,26 @@ const INITIAL: FormData = {
   degree_cert: null, reg_cert: null,
 }
 
+function Spinner() {
+  return (
+    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+    </svg>
+  )
+}
+
 export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
   const router = useRouter()
   const [step, setStep] = useState<Step>(1)
   const [form, setForm] = useState<FormData>(INITIAL)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingStep, setLoadingStep] = useState('')
 
   function set<K extends keyof FormData>(field: K, value: FormData[K]) {
     setForm(f => ({ ...f, [field]: value }))
+    setError('')
   }
 
   function toggleDegree(d: string) {
@@ -63,26 +79,33 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
     const supabase = getSupabaseClient()
 
     // 1. Create auth user
+    setLoadingStep('Creating account…')
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email: form.email, password: form.password,
       options: { data: { role: 'doctor' } },
     })
-    if (authErr) { setError(authErr.message); setLoading(false); return }
+    if (authErr) {
+      setError(FRIENDLY_ERRORS[authErr.message] ?? authErr.message)
+      setLoading(false); return
+    }
 
-    // 2. Upload verification documents to Supabase Storage
+    // 2. Upload documents
     let degreeCertUrl = null, regCertUrl = null
     if (form.degree_cert) {
+      setLoadingStep('Uploading degree certificate…')
       const { data } = await supabase.storage.from('doctor-docs')
-        .upload(`${authData.user?.id}/degree_cert.pdf`, form.degree_cert)
+        .upload(`${authData.user?.id}/degree_cert.pdf`, form.degree_cert, { upsert: true })
       degreeCertUrl = data?.path ?? null
     }
     if (form.reg_cert) {
+      setLoadingStep('Uploading registration certificate…')
       const { data } = await supabase.storage.from('doctor-docs')
-        .upload(`${authData.user?.id}/reg_cert.pdf`, form.reg_cert)
+        .upload(`${authData.user?.id}/reg_cert.pdf`, form.reg_cert, { upsert: true })
       regCertUrl = data?.path ?? null
     }
 
-    // 3. Create doctor record — verification_status defaults to PENDING
+    // 3. Create doctor record
+    setLoadingStep('Saving your profile…')
     const { data: doctor, error: docErr } = await supabase.from('doctor').insert({
       first_name: form.first_name, last_name: form.last_name,
       gender: form.gender, mobile: form.mobile, email: form.email,
@@ -97,7 +120,11 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
       auth_user_id: authData.user?.id,
       verification_status: 'PENDING',
     }).select().single()
-    if (docErr) { setError(docErr.message); setLoading(false); return }
+
+    if (docErr) {
+      setError(docErr.message)
+      setLoading(false); return
+    }
 
     await supabase.auth.updateUser({ data: { profile_id: doctor.id } })
     router.push('/dashboard/doctor?registered=1')
@@ -109,8 +136,9 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-50 to-white flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
+        {/* Progress */}
         <div className="flex items-center gap-3 mb-6">
-          <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-sm">← Back</button>
+          <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-sm flex-shrink-0">← Back</button>
           <div className="flex-1">
             <div className="flex justify-between text-xs text-gray-500 mb-1">
               <span>Step {step} of 3 — {stepTitles[step - 1]}</span>
@@ -122,27 +150,27 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
           </div>
         </div>
 
-        <div className="card p-8">
-          {/* STEP 1 — Personal */}
+        <div className="card p-6 sm:p-8">
+          {/* STEP 1 */}
           {step === 1 && (
             <div className="space-y-4">
               <h2 className="text-xl font-semibold">Personal details</h2>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">First name</label>
-                  <input className="input" placeholder="Dr. First" value={form.first_name}
+                  <input className="input" placeholder="Ravi" value={form.first_name}
                     onChange={e => set('first_name', e.target.value)} />
                 </div>
                 <div>
                   <label className="label">Last name</label>
-                  <input className="input" placeholder="Last" value={form.last_name}
+                  <input className="input" placeholder="Kumar" value={form.last_name}
                     onChange={e => set('last_name', e.target.value)} />
                 </div>
               </div>
               <div>
                 <label className="label">Gender</label>
-                <div className="flex gap-3 mt-1">
-                  {[['M','Male'],['F','Female'],['U','Prefer not to say']].map(([val, lbl]) => (
+                <div className="flex gap-2 mt-1">
+                  {[['M','Male'],['F','Female'],['U','Other']].map(([val, lbl]) => (
                     <button key={val} type="button" onClick={() => set('gender', val)}
                       className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
                         form.gender === val ? 'bg-brand-600 border-brand-600 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-brand-400'
@@ -151,16 +179,19 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
                 </div>
               </div>
               <div>
-                <label className="label">Mobile</label>
+                <label className="label">Mobile number</label>
                 <input className="input" placeholder="+91 98765 43210" value={form.mobile}
                   onChange={e => set('mobile', e.target.value)} />
               </div>
-              <button className="btn-primary w-full" disabled={!form.first_name || !form.last_name || !form.gender || !form.mobile}
-                onClick={() => setStep(2)}>Continue →</button>
+              <button
+                className="btn-primary w-full"
+                disabled={!form.first_name || !form.last_name || !form.gender || !form.mobile}
+                onClick={() => setStep(2)}
+              >Continue →</button>
             </div>
           )}
 
-          {/* STEP 2 — Credentials */}
+          {/* STEP 2 */}
           {step === 2 && (
             <div className="space-y-4">
               <h2 className="text-xl font-semibold">Professional credentials</h2>
@@ -213,41 +244,57 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
             </div>
           )}
 
-          {/* STEP 3 — Documents + Login */}
+          {/* STEP 3 */}
           {step === 3 && (
             <div className="space-y-4">
               <h2 className="text-xl font-semibold">Documents & login</h2>
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-                📋 Your account will be <strong>reviewed by Ayushpathi Admin</strong> before activation. Upload clear scans.
+                📋 Your account will be <strong>reviewed by Ayushpathi Admin</strong> before activation.
               </div>
               <div>
                 <label className="label">Degree certificate (PDF or image)</label>
                 <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="input py-2"
                   onChange={e => set('degree_cert', e.target.files?.[0] ?? null)} />
+                <p className="text-xs text-gray-400 mt-1">Max 5MB</p>
               </div>
               <div>
                 <label className="label">Medical registration certificate (PDF or image)</label>
                 <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="input py-2"
                   onChange={e => set('reg_cert', e.target.files?.[0] ?? null)} />
+                <p className="text-xs text-gray-400 mt-1">Max 5MB</p>
               </div>
               <hr className="border-gray-200" />
               <div>
                 <label className="label">Email address (your login)</label>
                 <input type="email" className="input" placeholder="doctor@example.com"
-                  value={form.email} onChange={e => set('email', e.target.value)} />
+                  value={form.email} onChange={e => set('email', e.target.value)} autoComplete="email" />
               </div>
               <div>
                 <label className="label">Password</label>
                 <input type="password" className="input" placeholder="Min 8 characters"
-                  value={form.password} onChange={e => set('password', e.target.value)} />
+                  value={form.password} onChange={e => set('password', e.target.value)} autoComplete="new-password" />
               </div>
-              {error && <p className="error-text">{error}</p>}
+
+              {error && (
+                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                  <span className="text-red-500 text-sm mt-0.5">⚠</span>
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+
               <div className="flex gap-3">
-                <button className="btn-secondary flex-1" onClick={() => setStep(2)}>← Back</button>
-                <button className="btn-primary flex-1"
+                <button className="btn-secondary flex-1" onClick={() => setStep(2)} disabled={loading}>← Back</button>
+                <button
+                  className="btn-primary flex-1"
                   disabled={!form.email || form.password.length < 8 || !form.degree_cert || !form.reg_cert || loading}
-                  onClick={handleSubmit}>
-                  {loading ? 'Submitting…' : 'Submit for review ✓'}
+                  onClick={handleSubmit}
+                >
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Spinner />
+                      {loadingStep || 'Submitting…'}
+                    </span>
+                  ) : 'Submit for review ✓'}
                 </button>
               </div>
               <p className="text-xs text-gray-400 text-center">
