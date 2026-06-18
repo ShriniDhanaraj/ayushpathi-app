@@ -2,6 +2,11 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import ConsentManager from '@/components/consent/ConsentManager'
 
+interface DoctorRow {
+  id: string; first_name: string; last_name: string
+  ayush_specialization: string; mobile: string; profile_photo_url: string | null
+}
+
 export default async function MyDoctorsPage() {
   const supabase = createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -11,8 +16,7 @@ export default async function MyDoctorsPage() {
     .from('patient').select('id').eq('auth_user_id', user.id).single()
   if (!patient) redirect('/dashboard/patient')
 
-  // Load all consent relationships (active + revoked)
-  const { data: consents } = await supabase
+  const { data: consentsRaw } = await supabase
     .from('patient_doctor_consent')
     .select(`
       id, status, share_full_history, consented_at, revoked_at,
@@ -20,6 +24,17 @@ export default async function MyDoctorsPage() {
     `)
     .eq('patient_id', patient.id)
     .order('consented_at', { ascending: false })
+
+  // Supabase may return joined row as array or single object — normalise to single
+  const consents = (consentsRaw ?? []).map(c => ({
+    ...c,
+    doctor: ((): DoctorRow | null => {
+      const d = c.doctor as unknown
+      if (!d) return null
+      if (Array.isArray(d)) return (d[0] as DoctorRow) ?? null
+      return d as DoctorRow
+    })(),
+  }))
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -36,7 +51,7 @@ export default async function MyDoctorsPage() {
           <a href="/appointments/new" className="btn-primary text-sm">+ Find a Doctor</a>
         </div>
 
-        {(!consents || consents.length === 0) && (
+        {consents.length === 0 && (
           <div className="card p-8 text-center">
             <p className="text-gray-400 text-sm">No doctor relationships yet.</p>
             <a href="/appointments/new" className="text-brand-600 text-sm font-medium mt-2 inline-block hover:underline">
@@ -45,7 +60,7 @@ export default async function MyDoctorsPage() {
           </div>
         )}
 
-        {consents && consents.length > 0 && (
+        {consents.length > 0 && (
           <div className="space-y-3">
             {consents.map(c => (
               <ConsentManager key={c.id} consent={c} patientId={patient.id} />
