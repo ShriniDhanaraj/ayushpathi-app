@@ -78,7 +78,7 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
     setLoading(true); setError('')
     const supabase = getSupabaseClient()
 
-    // 1. Create auth user
+    // Step 1: Create auth user (client-side — establishes browser session)
     setLoadingStep('Creating account…')
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email: form.email, password: form.password,
@@ -88,45 +88,71 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
       setError(FRIENDLY_ERRORS[authErr.message] ?? authErr.message)
       setLoading(false); return
     }
-
-    // 2. Upload documents
-    let degreeCertUrl = null, regCertUrl = null
-    if (form.degree_cert) {
-      setLoadingStep('Uploading degree certificate…')
-      const { data } = await supabase.storage.from('doctor-docs')
-        .upload(`${authData.user?.id}/degree_cert.pdf`, form.degree_cert, { upsert: true })
-      degreeCertUrl = data?.path ?? null
-    }
-    if (form.reg_cert) {
-      setLoadingStep('Uploading registration certificate…')
-      const { data } = await supabase.storage.from('doctor-docs')
-        .upload(`${authData.user?.id}/reg_cert.pdf`, form.reg_cert, { upsert: true })
-      regCertUrl = data?.path ?? null
-    }
-
-    // 3. Create doctor record
-    setLoadingStep('Saving your profile…')
-    const { data: doctor, error: docErr } = await supabase.from('doctor').insert({
-      first_name: form.first_name, last_name: form.last_name,
-      gender: form.gender, mobile: form.mobile, email: form.email,
-      registration_number: form.registration_number,
-      registration_council: form.registration_council,
-      degrees: form.degrees,
-      ayush_specialization: form.ayush_specialization,
-      years_of_experience: parseInt(form.years_of_experience) || 0,
-      languages_spoken: form.languages_spoken,
-      degree_cert_url: degreeCertUrl,
-      registration_cert_url: regCertUrl,
-      auth_user_id: authData.user?.id,
-      verification_status: 'PENDING',
-    }).select().single()
-
-    if (docErr) {
-      setError(docErr.message)
+    if (!authData.user) {
+      setError('Account creation failed. Please try again.')
       setLoading(false); return
     }
 
-    await supabase.auth.updateUser({ data: { profile_id: doctor.id } })
+    // Step 2: Upload documents to Supabase Storage (user is authenticated now)
+    let degreeCertUrl: string | null = null
+    let regCertUrl: string | null = null
+
+    if (form.degree_cert) {
+      setLoadingStep('Uploading degree certificate…')
+      const { data, error: uploadErr } = await supabase.storage
+        .from('doctor-docs')
+        .upload(`${authData.user.id}/degree_cert.pdf`, form.degree_cert, { upsert: true })
+      if (uploadErr) {
+        setError('Failed to upload degree certificate: ' + uploadErr.message)
+        setLoading(false); return
+      }
+      degreeCertUrl = data?.path ?? null
+    }
+
+    if (form.reg_cert) {
+      setLoadingStep('Uploading registration certificate…')
+      const { data, error: uploadErr } = await supabase.storage
+        .from('doctor-docs')
+        .upload(`${authData.user.id}/reg_cert.pdf`, form.reg_cert, { upsert: true })
+      if (uploadErr) {
+        setError('Failed to upload registration certificate: ' + uploadErr.message)
+        setLoading(false); return
+      }
+      regCertUrl = data?.path ?? null
+    }
+
+    // Step 3: Save doctor profile via server API route (uses service role — bypasses RLS)
+    setLoadingStep('Saving your profile…')
+    const res = await fetch('/api/register/doctor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        auth_user_id: authData.user.id,
+        first_name: form.first_name,
+        last_name: form.last_name,
+        gender: form.gender,
+        mobile: form.mobile,
+        email: form.email,
+        registration_number: form.registration_number,
+        registration_council: form.registration_council,
+        degrees: form.degrees,
+        ayush_specialization: form.ayush_specialization,
+        years_of_experience: form.years_of_experience,
+        languages_spoken: form.languages_spoken,
+        degree_cert_url: degreeCertUrl,
+        registration_cert_url: regCertUrl,
+      }),
+    })
+
+    const result = await res.json()
+    if (!res.ok) {
+      setError(result.error ?? 'Failed to save profile. Please try again.')
+      setLoading(false); return
+    }
+
+    // Step 4: Update user metadata with profile_id
+    await supabase.auth.updateUser({ data: { profile_id: result.doctor_id } })
+
     router.push('/dashboard/doctor?registered=1')
   }
 
@@ -136,7 +162,6 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-50 to-white flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
-        {/* Progress */}
         <div className="flex items-center gap-3 mb-6">
           <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-sm flex-shrink-0">← Back</button>
           <div className="flex-1">
@@ -186,8 +211,9 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
               <button
                 className="btn-primary w-full"
                 disabled={!form.first_name || !form.last_name || !form.gender || !form.mobile}
-                onClick={() => setStep(2)}
-              >Continue →</button>
+                onClick={() => setStep(2)}>
+                Continue →
+              </button>
             </div>
           )}
 
@@ -287,8 +313,7 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
                 <button
                   className="btn-primary flex-1"
                   disabled={!form.email || form.password.length < 8 || !form.degree_cert || !form.reg_cert || loading}
-                  onClick={handleSubmit}
-                >
+                  onClick={handleSubmit}>
                   {loading ? (
                     <span className="flex items-center justify-center gap-2">
                       <Spinner />

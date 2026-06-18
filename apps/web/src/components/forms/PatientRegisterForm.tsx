@@ -6,15 +6,11 @@ import { getSupabaseClient } from '@/lib/supabase'
 type Step = 1 | 2 | 3
 
 interface FormData {
-  // Step 1 — Identity
   first_name: string; last_name: string; date_of_birth: string; gender: string
-  // Step 2 — Contact
   email: string; password: string; mobile: string; whatsapp_enabled: boolean
   communication_consent: string[]
-  // Step 3 — Address
   door_number: string; street: string; area: string
   city: string; district: string; state: string; pincode: string
-  // DPDP: minor consent
   guardian_name: string; guardian_mobile: string
 }
 
@@ -35,9 +31,23 @@ const INDIA_STATES = [
   'Uttarakhand','West Bengal','Delhi','Jammu & Kashmir','Ladakh','Puducherry',
 ]
 
+const FRIENDLY_ERRORS: Record<string, string> = {
+  'User already registered': 'An account with this email already exists. Please sign in.',
+  'Password should be at least 6 characters': 'Password must be at least 8 characters.',
+}
+
 function isMinor(dob: string) {
   if (!dob) return false
   return new Date(dob) > new Date(new Date().setFullYear(new Date().getFullYear() - 18))
+}
+
+function Spinner() {
+  return (
+    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+    </svg>
+  )
 }
 
 export default function PatientRegisterForm({ onBack }: { onBack: () => void }) {
@@ -46,9 +56,11 @@ export default function PatientRegisterForm({ onBack }: { onBack: () => void }) 
   const [form, setForm] = useState<FormData>(INITIAL)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingStep, setLoadingStep] = useState('')
 
   function set(field: keyof FormData, value: unknown) {
     setForm(f => ({ ...f, [field]: value }))
+    setError('')
   }
 
   function toggleConsent(channel: string) {
@@ -63,42 +75,57 @@ export default function PatientRegisterForm({ onBack }: { onBack: () => void }) 
     setLoading(true); setError('')
     const supabase = getSupabaseClient()
 
-    // 1. Create auth user
+    // Step 1: Create auth user (client-side — establishes browser session)
+    setLoadingStep('Creating account…')
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
       options: { data: { role: 'patient' } },
     })
-    if (authErr) { setError(authErr.message); setLoading(false); return }
+    if (authErr) {
+      setError(FRIENDLY_ERRORS[authErr.message] ?? authErr.message)
+      setLoading(false); return
+    }
+    if (!authData.user) {
+      setError('Account creation failed. Please try again.')
+      setLoading(false); return
+    }
 
-    // 2. Create address record
-    const { data: addr, error: addrErr } = await supabase.from('address').insert({
-      door_number: form.door_number, street: form.street, area: form.area,
-      city: form.city, district: form.district, state: form.state,
-      pincode: form.pincode, country: 'India',
-    }).select().single()
-    if (addrErr) { setError(addrErr.message); setLoading(false); return }
-
-    // 3. Create patient record
-    const minor = isMinor(form.date_of_birth)
-    const { data: patient, error: patErr } = await supabase.from('patient').insert({
-      first_name: form.first_name, last_name: form.last_name,
-      date_of_birth: form.date_of_birth, gender: form.gender,
-      email: form.email, mobile: form.mobile,
-      whatsapp_enabled: form.whatsapp_enabled,
-      communication_consent: form.communication_consent,
-      address_id: addr.id,
-      auth_user_id: authData.user?.id,
-      ...(minor ? {
+    // Step 2: Save profile via server API route (uses service role — bypasses RLS)
+    setLoadingStep('Saving your profile…')
+    const res = await fetch('/api/register/patient', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        auth_user_id: authData.user.id,
+        first_name: form.first_name,
+        last_name: form.last_name,
+        date_of_birth: form.date_of_birth,
+        gender: form.gender,
+        email: form.email,
+        mobile: form.mobile,
+        whatsapp_enabled: form.whatsapp_enabled,
+        communication_consent: form.communication_consent,
+        door_number: form.door_number,
+        street: form.street,
+        area: form.area,
+        city: form.city,
+        district: form.district,
+        state: form.state,
+        pincode: form.pincode,
         guardian_name: form.guardian_name,
         guardian_mobile: form.guardian_mobile,
-        guardian_consent_at: new Date().toISOString(),
-      } : {}),
-    }).select().single()
-    if (patErr) { setError(patErr.message); setLoading(false); return }
+      }),
+    })
 
-    // 4. Update user metadata with profile_id
-    await supabase.auth.updateUser({ data: { profile_id: patient.id } })
+    const result = await res.json()
+    if (!res.ok) {
+      setError(result.error ?? 'Failed to save profile. Please try again.')
+      setLoading(false); return
+    }
+
+    // Step 3: Update user metadata with profile_id
+    await supabase.auth.updateUser({ data: { profile_id: result.patient_id } })
 
     router.push('/dashboard/patient?welcome=1')
   }
@@ -109,7 +136,6 @@ export default function PatientRegisterForm({ onBack }: { onBack: () => void }) 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-50 to-white flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
-        {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-sm">← Back</button>
           <div className="flex-1">
@@ -162,7 +188,6 @@ export default function PatientRegisterForm({ onBack }: { onBack: () => void }) 
                 </div>
               </div>
 
-              {/* Guardian fields for minors */}
               {isMinor(form.date_of_birth) && (
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
                   <p className="text-sm text-amber-800 font-medium">
@@ -197,12 +222,12 @@ export default function PatientRegisterForm({ onBack }: { onBack: () => void }) 
               <div>
                 <label className="label">Email address</label>
                 <input type="email" className="input" placeholder="you@example.com"
-                  value={form.email} onChange={e => set('email', e.target.value)} />
+                  value={form.email} onChange={e => set('email', e.target.value)} autoComplete="email" />
               </div>
               <div>
                 <label className="label">Password</label>
                 <input type="password" className="input" placeholder="Min 8 characters"
-                  value={form.password} onChange={e => set('password', e.target.value)} />
+                  value={form.password} onChange={e => set('password', e.target.value)} autoComplete="new-password" />
               </div>
               <div>
                 <label className="label">Mobile number</label>
@@ -213,11 +238,8 @@ export default function PatientRegisterForm({ onBack }: { onBack: () => void }) 
                 <input type="checkbox" id="wa" className="w-4 h-4 accent-brand-600"
                   checked={form.whatsapp_enabled}
                   onChange={e => set('whatsapp_enabled', e.target.checked)} />
-                <label htmlFor="wa" className="text-sm text-gray-700">
-                  This number has WhatsApp
-                </label>
+                <label htmlFor="wa" className="text-sm text-gray-700">This number has WhatsApp</label>
               </div>
-
               <div>
                 <label className="label">How should we notify you?</label>
                 <div className="flex gap-2 mt-1">
@@ -234,7 +256,6 @@ export default function PatientRegisterForm({ onBack }: { onBack: () => void }) 
                   ))}
                 </div>
               </div>
-
               <div className="flex gap-3 mt-2">
                 <button className="btn-secondary flex-1" onClick={() => setStep(1)}>← Back</button>
                 <button
@@ -296,15 +317,25 @@ export default function PatientRegisterForm({ onBack }: { onBack: () => void }) 
                 </div>
               </div>
 
-              {error && <p className="error-text">{error}</p>}
+              {error && (
+                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                  <span className="text-red-500 text-sm mt-0.5">⚠</span>
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
 
               <div className="flex gap-3 mt-2">
-                <button className="btn-secondary flex-1" onClick={() => setStep(2)}>← Back</button>
+                <button className="btn-secondary flex-1" onClick={() => setStep(2)} disabled={loading}>← Back</button>
                 <button
                   className="btn-primary flex-1"
                   disabled={!form.city || !form.state || loading}
                   onClick={handleSubmit}>
-                  {loading ? 'Creating account…' : 'Create account ✓'}
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Spinner />
+                      {loadingStep || 'Creating account…'}
+                    </span>
+                  ) : 'Create account ✓'}
                 </button>
               </div>
 
