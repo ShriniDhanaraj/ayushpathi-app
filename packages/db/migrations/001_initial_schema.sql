@@ -448,3 +448,41 @@ ALTER TABLE patient_doctor_consent ADD COLUMN purpose TEXT DEFAULT 'medical_cons
 -- =============================================================
 CREATE POLICY hide_deleted_patients ON patient
   FOR SELECT USING (deleted_at IS NULL);
+
+-- =============================================================
+-- NEAR-ME SEARCH (PostGIS)
+-- Returns approved doctors within radius, ordered by distance
+-- =============================================================
+CREATE OR REPLACE FUNCTION doctors_near_location(
+  p_lat FLOAT, p_lng FLOAT, p_radius_km FLOAT DEFAULT 10
+)
+RETURNS TABLE (
+  id UUID, first_name TEXT, last_name TEXT,
+  ayush_specialization TEXT, years_of_experience INTEGER,
+  languages_spoken TEXT[], teleconsult_enabled BOOLEAN,
+  teleconsult_fee NUMERIC,
+  city TEXT, state TEXT,
+  distance_km FLOAT
+) LANGUAGE sql STABLE AS $$
+  SELECT
+    d.id, d.first_name, d.last_name,
+    d.ayush_specialization, d.years_of_experience,
+    d.languages_spoken, d.teleconsult_enabled, d.teleconsult_fee,
+    a.city, a.state,
+    ROUND((ST_Distance(
+      a.location,
+      ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography
+    ) / 1000)::numeric, 1)::float AS distance_km
+  FROM doctor d
+  JOIN hospital_doctor hd ON hd.doctor_id = d.id AND hd.active = true
+  JOIN hospital h ON h.id = hd.hospital_id AND h.active = true
+  JOIN address a ON a.id = h.address_id AND a.location IS NOT NULL
+  WHERE d.verification_status = 'APPROVED'
+    AND ST_DWithin(
+      a.location,
+      ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography,
+      p_radius_km * 1000
+    )
+  ORDER BY distance_km ASC
+  LIMIT 20;
+$$;
