@@ -57,12 +57,6 @@ export default function PatientDashboard() {
     load()
   }, [router])
 
-  async function handleSignOut() {
-    const supabase = getSupabaseClient()
-    await supabase.auth.signOut()
-    router.push('/')
-  }
-
   const cards = [
     { label: 'Upcoming', value: stats.upcoming,      icon: '📅', href: '/appointments/new', cta: 'Book new' },
     { label: 'My Doctors', value: stats.activeDoctors, icon: '👨‍⚕️', href: '/doctors',          cta: 'Manage'   },
@@ -86,12 +80,12 @@ export default function PatientDashboard() {
           </h1>
           <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Ayushpathi Patient Portal</p>
         </div>
-        <button
-          onClick={handleSignOut}
+        <a
+          href="/api/auth/signout"
           className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
         >
           Sign out
-        </button>
+        </a>
       </header>
 
       <main className="max-w-4xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
