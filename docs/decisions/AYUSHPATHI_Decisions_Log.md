@@ -307,10 +307,12 @@ Patient books teleconsultation
 
 ## Decision 13 — Notifications ✅
 
-**WhatsApp via Twilio — primary channel. SMS deferred.**
+**WhatsApp via Gupshup — primary channel. No Twilio. SMS deferred.**
 
-- Provider: Twilio WhatsApp Business API
-- Free trial available; production: ~₹0.50–1 per conversation (negligible at NGO scale)
+- Provider: **Gupshup** (India-native WhatsApp Business API — same stack as DROPeZi)
+- Why Gupshup over Twilio: India-native, cheaper per conversation, no unnecessary foreign middleware
+- Alternative if Gupshup changes: AISensy (same category, India-native)
+- Free tier: available; production costs negligible at NGO scale
 - Use cases: appointment confirmation, appointment reminder (24hr + 1hr before), prescription ready, teleconsultation link
 - SMS: skipped for now, architecture allows adding later with minimal effort
 - Email: Supabase built-in transactional email covers basic notifications at no cost
