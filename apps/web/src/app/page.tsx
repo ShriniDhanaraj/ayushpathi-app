@@ -1,27 +1,82 @@
+import Link from 'next/link'
+
 export default function Home() {
+  const features = [
+    { icon: '🌿', title: 'Ayurveda', desc: 'Ancient wisdom for holistic healing' },
+    { icon: '🧘', title: 'Yoga & Naturopathy', desc: 'Mind-body balance and natural cures' },
+    { icon: '🌙', title: 'Unani', desc: 'Greco-Arabic tradition of medicine' },
+    { icon: '⚕️', title: 'Siddha', desc: 'South Indian classical medicine system' },
+    { icon: '💊', title: 'Homeopathy', desc: 'Like cures like, minimal doses' },
+  ]
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-50 to-white flex flex-col items-center justify-center px-6">
-      <div className="max-w-lg w-full text-center space-y-6">
-        <div>
-          <h1 className="text-5xl font-bold text-gray-900">Ayushpathi</h1>
-          <p className="mt-3 text-lg text-gray-500">Bringing Traditional Indian Medicine to the World</p>
+    <div className="min-h-screen bg-gradient-to-b from-green-50 via-white to-white">
+      {/* Hero */}
+      <div className="max-w-2xl mx-auto px-6 pt-16 pb-10 text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl mb-6 shadow-lg">
+          <span className="text-white text-3xl font-bold">A</span>
         </div>
-
-        <div className="flex flex-col gap-3 pt-4">
-          <a href="/auth/register"
-            className="block w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3.5 px-6 rounded-xl text-center transition-colors">
-            Register — Patient or Doctor
-          </a>
-          <a href="/auth/login"
-            className="block w-full bg-white hover:bg-gray-50 text-gray-800 font-semibold py-3.5 px-6 rounded-xl text-center border border-gray-300 transition-colors">
-            Sign In
-          </a>
-        </div>
-
-        <p className="text-xs text-gray-400 pt-4">
-          AYUSH · Ayurveda · Yoga & Naturopathy · Unani · Siddha · Homeopathy
+        <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 tracking-tight">
+          Ayushpathi
+        </h1>
+        <p className="mt-3 text-lg sm:text-xl text-gray-500 leading-relaxed">
+          India&apos;s trusted platform for traditional AYUSH medicine
         </p>
+        <p className="mt-2 text-sm text-gray-400">
+          Connect with verified Ayurveda, Yoga, Unani, Siddha &amp; Homeopathy practitioners
+        </p>
+
+        <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
+          <Link
+            href="/auth/register"
+            className="bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3.5 px-8 rounded-xl text-center transition-colors shadow-sm"
+          >
+            Get started — it&apos;s free
+          </Link>
+          <Link
+            href="/auth/login"
+            className="bg-white hover:bg-gray-50 text-gray-800 font-semibold py-3.5 px-8 rounded-xl text-center border border-gray-300 transition-colors"
+          >
+            Sign in
+          </Link>
+        </div>
       </div>
+
+      {/* Feature pills */}
+      <div className="max-w-3xl mx-auto px-6 pb-10">
+        <div className="flex flex-wrap gap-2 justify-center">
+          {features.map(f => (
+            <div key={f.title} className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-4 py-2 shadow-sm">
+              <span>{f.icon}</span>
+              <span className="text-sm font-medium text-gray-700">{f.title}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Trust row */}
+      <div className="border-t border-gray-100 bg-white">
+        <div className="max-w-3xl mx-auto px-6 py-8">
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <p className="text-2xl font-bold text-brand-600">100%</p>
+              <p className="text-xs text-gray-500 mt-1">Verified practitioners</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-brand-600">🇮🇳</p>
+              <p className="text-xs text-gray-500 mt-1">Data stored in India</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-brand-600">DPDP</p>
+              <p className="text-xs text-gray-500 mt-1">Act 2023 compliant</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-center text-xs text-gray-400 py-6">
+        AYUSH · Ayurveda · Yoga &amp; Naturopathy · Unani · Siddha · Homeopathy
+      </p>
     </div>
   )
 }
