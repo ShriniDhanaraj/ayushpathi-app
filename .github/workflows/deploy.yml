@@ -1,4 +1,4 @@
-name: Deploy to India Server
+name: Deploy Web to Vercel
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,18 +36,12 @@ jobs:
           NEXT_PUBLIC_MAPS_PROVIDER: mappls
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
 
-      - name: Deploy to India server (SSH → PM2)
+      - name: Deploy to Vercel
         if: github.ref == 'refs/heads/main'
-        uses: appleboy/ssh-action@v1.0.3
+        uses: amondnet/vercel-action@v25
         with:
-          host: ${{ secrets.DEPLOY_HOST }}         # IP of Mac Mini or DigitalOcean Bangalore
-          username: ${{ secrets.DEPLOY_USER }}      # e.g. ubuntu or your Mac user
-          key: ${{ secrets.DEPLOY_SSH_KEY }}        # private key (public key added to server's authorized_keys)
-          port: ${{ secrets.DEPLOY_PORT || 22 }}
-          script: |
-            cd /var/www/ayushpathi
-            git pull origin main
-            pnpm install --frozen-lockfile
-            pnpm --filter web build
-            pm2 restart ayushpathi-web || pm2 start "pnpm --filter web start" --name ayushpathi-web
-            pm2 save
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: apps/web
+          vercel-args: '--prod'

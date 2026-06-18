@@ -17,8 +17,8 @@ Ayushpathi is an open-source, NGO-purpose healthcare platform for the AYUSH ecos
 | File Storage | Supabase Storage |
 | Address / Maps | MapMyIndia (Mappls) — India-first |
 | Notifications | Gupshup (India-native WhatsApp Business API) |
-| CI/CD | GitHub Actions → SSH → PM2 (India server) |
-| Hosting | Mac Mini (India) or DigitalOcean Bangalore `blr1` |
+| CI/CD | GitHub Actions → Vercel |
+| Hosting | Vercel (frontend) + Supabase Mumbai (data) |
 | Domain | rasbros.com |
 
 ---
