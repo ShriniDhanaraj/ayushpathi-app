@@ -1,4 +1,4 @@
-name: Deploy Web to Vercel
+name: Build & Deploy
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,19 +24,26 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
+      - name: Build web app
         run: pnpm --filter web build
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY }}
+          NEXT_PUBLIC_MAPPLS_ACCESS_TOKEN: ${{ secrets.NEXT_PUBLIC_MAPPLS_ACCESS_TOKEN }}
+          NEXT_PUBLIC_MAPS_PROVIDER: mappls
 
-      - name: Deploy to Vercel
+      # Deploy via SSH to India server (Mac Mini or DigitalOcean Bangalore)
+      # Requires: SSH_HOST, SSH_USER, SSH_PRIVATE_KEY secrets set in GitHub repo settings
+      - name: Deploy to India server
         if: github.ref == 'refs/heads/main'
-        uses: amondnet/vercel-action@v25
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          working-directory: apps/web
-          vercel-args: '--prod'
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /var/www/ayushpathi
+            git pull origin main
+            pnpm install --frozen-lockfile
+            pnpm --filter web build
+            pm2 restart ayushpathi-web || pm2 start "pnpm --filter web start" --name ayushpathi-web
