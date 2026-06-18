@@ -1,0 +1,23 @@
+{
+  "name": "ayushpathi-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ayushpathi — AYUSH Healthcare Platform (NGO)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "web": "pnpm --filter web dev",
+    "mobile": "pnpm --filter mobile start",
+    "db:migrate": "pnpm --filter db migrate",
+    "db:types": "pnpm --filter db generate-types",
+    "build": "pnpm --filter web build",
+    "lint": "pnpm -r lint"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.15.0"
+}
