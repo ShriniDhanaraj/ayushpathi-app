@@ -84,7 +84,7 @@ export default function PatientRegister() {
 
     // 2. Save profile via server API
     setLoadingStep('Saving your profile…')
-    const res = await fetch(`${process.env.EXPO_PUBLIC_APP_URL}/api/register/patient`, {
+    const res = await fetch(`${"https://rasbros.com"}/api/register/patient`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
