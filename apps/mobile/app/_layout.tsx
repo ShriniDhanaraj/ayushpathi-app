@@ -3,7 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router'
 import { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
-type UserRole = 'patient' | 'doctor' | 'unknown'
+type UserRole = 'patient' | 'doctor-approved' | 'doctor-pending' | 'unknown'
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null)
@@ -19,7 +19,12 @@ export default function RootLayout() {
       .select('verification_status')
       .eq('auth_user_id', userId)
       .maybeSingle()
-    if (doctorRow) return 'doctor'
+
+    if (doctorRow) {
+      return doctorRow.verification_status === 'APPROVED'
+        ? 'doctor-approved'
+        : 'doctor-pending'
+    }
 
     // Check patient table
     const { data: patientRow } = await supabase
@@ -31,7 +36,7 @@ export default function RootLayout() {
 
     // Fallback: check user metadata
     const meta = (await supabase.auth.getUser()).data.user?.user_metadata
-    if (meta?.role === 'doctor') return 'doctor'
+    if (meta?.role === 'doctor') return 'doctor-pending'
     if (meta?.role === 'patient') return 'patient'
 
     return 'unknown'
@@ -62,15 +67,31 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (loading) return
-    const inAuthGroup = segments[0] === '(auth)'
-    const inPending = segments[0] === 'pending-approval'
+
+    const inAuthGroup       = segments[0] === '(auth)'
+    const inPending         = segments[0] === 'pending-approval'
+    const inDoctorDashboard = segments[0] === 'doctor-dashboard'
+    const inTabs            = segments[0] === '(tabs)'
 
     if (!session) {
       if (!inAuthGroup) router.replace('/(auth)/login')
-    } else if (role === 'doctor') {
-      if (!inPending) router.replace('/pending-approval')
-    } else if (role === 'patient' || role === 'unknown') {
-      if (inAuthGroup || inPending) router.replace('/(tabs)/')
+      return
+    }
+
+    switch (role) {
+      case 'doctor-approved':
+        // Approved doctors go to their own dashboard
+        if (!inDoctorDashboard) router.replace('/doctor-dashboard')
+        break
+      case 'doctor-pending':
+        // Pending / rejected doctors wait on the approval screen
+        if (!inPending) router.replace('/pending-approval')
+        break
+      case 'patient':
+      case 'unknown':
+        // Patients (and freshly registered users) go to the patient tabs
+        if (inAuthGroup || inPending || inDoctorDashboard) router.replace('/(tabs)/')
+        break
     }
   }, [session, role, segments, loading])
 
@@ -79,6 +100,7 @@ export default function RootLayout() {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="pending-approval" />
+      <Stack.Screen name="doctor-dashboard" />
     </Stack>
   )
 }
