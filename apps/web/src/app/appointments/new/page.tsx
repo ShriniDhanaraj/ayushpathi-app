@@ -10,7 +10,7 @@ interface Doctor {
   ayush_specialization: string; years_of_experience: number
   languages_spoken: string[]; teleconsult_enabled: boolean
   teleconsult_fee: number
-  address?: { city: string; state: string }
+  address?: Array<{ city: string; state: string }> | { city: string; state: string } | null
 }
 
 interface Slot { date: string; start_time: string; end_time: string }
@@ -23,9 +23,6 @@ const SPECIALIZATIONS = [
 
 function generateSlots(availability: { start_time: string; end_time: string; slot_duration: number }[], date: string): Slot[] {
   const slots: Slot[] = []
-  const day = new Date(date).toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase().slice(0, 3)
-  const dayMap: Record<string, string> = { MON: 'MON', TUE: 'TUE', WED: 'WED', THU: 'THU', FRI: 'FRI', SAT: 'SAT', SUN: 'SUN' }
-
   availability.forEach(avail => {
     const [sh, sm] = avail.start_time.split(':').map(Number)
     const [eh, em] = avail.end_time.split(':').map(Number)
@@ -66,7 +63,7 @@ export default function BookAppointmentPage() {
       .select('id, first_name, last_name, ayush_specialization, years_of_experience, languages_spoken, teleconsult_enabled, teleconsult_fee, address:address_id(city, state)')
       .eq('ayush_specialization', spec)
       .eq('verification_status', 'APPROVED')
-    setDoctors(data ?? [])
+    setDoctors((data ?? []) as unknown as Doctor[])
     setSearching(false)
     setStep(2)
   }
@@ -98,10 +95,12 @@ export default function BookAppointmentPage() {
     setLoading(true)
     const supabase = getSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
-    const { data: patient } = await supabase.from('patient').select('id').eq('auth_user_id', user!.id).single()
+    if (!user) { router.push('/auth/login'); return }
+    const { data: patient } = await supabase.from('patient').select('id').eq('auth_user_id', user.id).single()
+    if (!patient) { setLoading(false); return }
 
     await supabase.from('appointment').insert({
-      patient_id: patient!.id,
+      patient_id: patient.id,
       doctor_id: selectedDoctor.id,
       appointment_date: selectedSlot.date,
       start_time: selectedSlot.start_time,
@@ -113,10 +112,8 @@ export default function BookAppointmentPage() {
     router.push('/dashboard/patient?booked=1')
   }
 
-  // Min date = tomorrow
   const minDate = new Date(); minDate.setDate(minDate.getDate() + 1)
   const minDateStr = minDate.toISOString().split('T')[0]
-  // Max date = 30 days ahead
   const maxDate = new Date(); maxDate.setDate(maxDate.getDate() + 30)
   const maxDateStr = maxDate.toISOString().split('T')[0]
 
@@ -127,7 +124,6 @@ export default function BookAppointmentPage() {
         <span className="font-semibold text-gray-900">Book Appointment</span>
       </header>
 
-      {/* Step indicator */}
       <div className="bg-white border-b px-6 py-3">
         <div className="max-w-3xl mx-auto flex gap-6">
           {['Find Doctor', 'Pick Slot', 'Confirm'].map((label, i) => (
@@ -144,7 +140,6 @@ export default function BookAppointmentPage() {
       </div>
 
       <main className="max-w-3xl mx-auto p-6 space-y-4">
-        {/* Step 1: Find Doctor */}
         {step === 1 && (
           <div className="card p-6 space-y-4">
             <h2 className="font-semibold text-gray-900">Choose AYUSH specialization</h2>
@@ -164,7 +159,6 @@ export default function BookAppointmentPage() {
           </div>
         )}
 
-        {/* Step 2: Doctor list + slot picker */}
         {step === 2 && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -172,6 +166,12 @@ export default function BookAppointmentPage() {
               <button onClick={() => { setStep(1); setSelectedDoctor(null); setSlots([]) }}
                 className="text-sm text-brand-600 hover:underline">Change specialization</button>
             </div>
+
+            {doctors.length === 0 && (
+              <div className="card p-8 text-center text-sm text-gray-400">
+                No approved doctors found for this specialization yet.
+              </div>
+            )}
 
             {doctors.map(doc => (
               <div key={doc.id} className={`card p-5 cursor-pointer transition-all ${
@@ -253,18 +253,17 @@ export default function BookAppointmentPage() {
           </div>
         )}
 
-        {/* Step 3: Confirm */}
         {step === 3 && selectedDoctor && selectedSlot && (
           <div className="card p-6 space-y-5">
             <h2 className="font-semibold text-gray-900">Confirm appointment</h2>
             <div className="bg-brand-50 rounded-xl p-4 space-y-2 text-sm">
-              {[
+              {([
                 ['Doctor', `Dr. ${selectedDoctor.first_name} ${selectedDoctor.last_name}`],
-                ['Specialization', SPECIALIZATIONS.find(s => s.code === selectedDoctor.ayush_specialization)?.label],
+                ['Specialization', SPECIALIZATIONS.find(s => s.code === selectedDoctor.ayush_specialization)?.label ?? ''],
                 ['Date', new Date(selectedSlot.date).toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' })],
                 ['Time', `${selectedSlot.start_time} – ${selectedSlot.end_time}`],
                 ['Type', type === 'F2F' ? 'In-person' : 'Teleconsultation'],
-              ].map(([label, value]) => (
+              ] as [string, string][]).map(([label, value]) => (
                 <div key={label} className="flex justify-between">
                   <span className="text-gray-500">{label}</span>
                   <span className="font-medium text-gray-900">{value}</span>
