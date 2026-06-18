@@ -3,12 +3,9 @@ const nextConfig = {
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '*.supabase.co' }],
   },
-  typescript: {
-    // Type errors fixed post-holiday — don't block deployment
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // TypeScript and ESLint are clean — strict checks re-enabled
+  typescript: { ignoreBuildErrors: false },
+  eslint: { ignoreDuringBuilds: false },
 }
+
 module.exports = nextConfig
