@@ -4,14 +4,11 @@
   "private": true,
   "description": "Ayushpathi — AYUSH Healthcare Platform (NGO)",
   "workspaces": [
-    "apps/*",
+    "apps/web",
     "packages/*"
   ],
   "scripts": {
     "web": "pnpm --filter web dev",
-    "mobile": "pnpm --filter mobile start",
-    "db:migrate": "pnpm --filter db migrate",
-    "db:types": "pnpm --filter db generate-types",
     "build": "pnpm --filter web build",
     "lint": "pnpm -r lint"
   },
