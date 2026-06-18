@@ -1,17 +1,13 @@
 {
   "name": "@ayushpathi/mobile",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
-    "ios": "expo start --ios",
-    "lan": "expo start --lan"
+    "ios": "expo start --ios"
   },
   "dependencies": {
-    "@expo/vector-icons": "^14.0.0",
-    "@react-native-async-storage/async-storage": "1.23.1",
-    "@supabase/supabase-js": "^2.39.0",
     "expo": "~54.0.0",
     "expo-constants": "~17.0.0",
     "expo-font": "~13.0.0",
@@ -24,11 +20,14 @@
     "react-native": "0.77.0",
     "react-native-safe-area-context": "4.14.0",
     "react-native-screens": "~4.4.0",
-    "react-native-url-polyfill": "^2.0.0"
+    "react-native-url-polyfill": "^2.0.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "@expo/vector-icons": "^14.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@types/react": "~18.3.0",
-    "typescript": "^5.3.0"
+    "typescript": "~5.3.3"
   }
 }

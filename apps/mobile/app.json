@@ -5,27 +5,27 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "ayushpathi",
     "userInterfaceStyle": "light",
+    "scheme": "ayushpathi",
     "splash": {
-      "backgroundColor": "#16a34a"
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a6b3a"
     },
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.ayushpathi.app"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#16a34a"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a6b3a"
       },
       "package": "com.ayushpathi.app"
     },
     "plugins": [
       "expo-router",
       "expo-secure-store"
-    ],
-    "experiments": {
-      "typedRoutes": true
-    }
+    ]
   }
 }

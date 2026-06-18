@@ -1,21 +1,24 @@
-import { StyleSheet, Text, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { colors } from '@/lib/colors'
+import { View, Text, StyleSheet } from 'react-native'
 
 export default function AppointmentsScreen() {
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.gray[50] }}>
-      <View style={s.center}>
-        <Text style={s.emoji}>🚧</Text>
-        <Text style={s.title}>Appointments</Text>
-        <Text style={s.sub}>Coming soon in Phase 2</Text>
+    <View style={styles.container}>
+      <View style={styles.header}><Text style={styles.title}>Appointments</Text></View>
+      <View style={styles.body}>
+        <Text style={styles.icon}>📅</Text>
+        <Text style={styles.msg}>Book appointments at rasbros.com</Text>
+        <Text style={styles.sub}>Full booking flow coming in the next update.</Text>
       </View>
-    </SafeAreaView>
+    </View>
   )
 }
-const s = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  emoji: { fontSize: 48 },
-  title: { fontSize: 20, fontWeight: '700', color: colors.gray[900] },
-  sub: { fontSize: 14, color: colors.gray[400] },
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f0f7f4' },
+  header: { backgroundColor: '#1a6b3a', padding: 24, paddingTop: 56 },
+  title: { color: '#fff', fontSize: 20, fontWeight: '700' },
+  body: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  icon: { fontSize: 48, marginBottom: 16 },
+  msg: { fontSize: 18, fontWeight: '600', color: '#333', textAlign: 'center' },
+  sub: { fontSize: 13, color: '#888', textAlign: 'center', marginTop: 8 },
 })

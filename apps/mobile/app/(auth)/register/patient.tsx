@@ -1,289 +1,197 @@
 import { useState } from 'react'
 import {
-  KeyboardAvoidingView, Platform, Pressable, ScrollView,
-  StyleSheet, Text, View,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { supabase } from '@/lib/supabase'
-import Button from '@/components/ui/Button'
-import Input from '@/components/ui/Input'
-import { colors } from '@/lib/colors'
+import { supabase } from '../../../lib/supabase'
 
-const INDIA_STATES = [
-  'Andhra Pradesh','Assam','Bihar','Chhattisgarh','Delhi','Goa','Gujarat',
-  'Haryana','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Odisha',
-  'Punjab','Rajasthan','Tamil Nadu','Telangana','Uttar Pradesh','West Bengal',
-  'Jammu & Kashmir','Puducherry',
-]
-
-const GENDER_OPTIONS = [['M','Male'],['F','Female'],['U','Other']] as const
-
-interface FormData {
-  first_name: string; last_name: string
-  date_of_birth: string; gender: string
-  email: string; password: string; mobile: string
-  city: string; state: string; pincode: string
-}
-
-const INITIAL: FormData = {
-  first_name: '', last_name: '', date_of_birth: '', gender: '',
-  email: '', password: '', mobile: '',
-  city: '', state: '', pincode: '',
-}
-
-const FRIENDLY: Record<string, string> = {
-  'User already registered': 'An account with this email already exists.',
-}
+const WEB_API = 'https://rasbros.com'
 
 type Step = 1 | 2 | 3
 
-function ProgressBar({ step }: { step: Step }) {
-  return (
-    <View style={pb.wrapper}>
-      <Text style={pb.label}>Step {step} of 3</Text>
-      <View style={pb.track}>
-        <View style={[pb.fill, { width: `${(step / 3) * 100}%` as `${number}%` }]} />
-      </View>
-    </View>
-  )
-}
-const pb = StyleSheet.create({
-  wrapper: { gap: 4 },
-  label: { fontSize: 12, color: colors.gray[500] },
-  track: { height: 4, backgroundColor: colors.gray[200], borderRadius: 4 },
-  fill: { height: 4, backgroundColor: colors.brand[600], borderRadius: 4 },
-})
-
-export default function PatientRegister() {
+export default function PatientRegisterScreen() {
   const router = useRouter()
   const [step, setStep] = useState<Step>(1)
-  const [form, setForm] = useState<FormData>(INITIAL)
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [loadingStep, setLoadingStep] = useState('')
+  const [error, setError] = useState('')
 
-  function set(field: keyof FormData, value: string) {
-    setForm(f => ({ ...f, [field]: value }))
+  // Step 1 — account
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+
+  // Step 2 — personal
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [dob, setDob] = useState('')
+  const [gender, setGender] = useState('')
+  const [phone, setPhone] = useState('')
+
+  // Step 3 — address
+  const [street, setStreet] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('')
+  const [pincode, setPincode] = useState('')
+
+  function nextStep() {
     setError('')
+    if (step === 1) {
+      if (!email || !password || !confirmPassword) { setError('All fields required.'); return }
+      if (password !== confirmPassword) { setError('Passwords do not match.'); return }
+      if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
+    }
+    if (step === 2) {
+      if (!firstName || !lastName || !dob || !gender || !phone) { setError('All fields required.'); return }
+    }
+    if (step < 3) setStep((step + 1) as Step)
   }
 
   async function handleSubmit() {
-    setLoading(true); setError('')
+    setError('')
+    if (!street || !city || !state || !pincode) { setError('All address fields required.'); return }
+    setLoading(true)
+    try {
+      // 1. Create auth user
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({ email, password })
+      if (signUpError) throw signUpError
+      const authUserId = authData.user?.id
+      if (!authUserId) throw new Error('Failed to create account.')
 
-    // 1. Create auth user
-    setLoadingStep('Creating account…')
-    const { data: authData, error: authErr } = await supabase.auth.signUp({
-      email: form.email.trim(),
-      password: form.password,
-      options: { data: { role: 'patient' } },
-    })
-    if (authErr || !authData.user) {
-      setError(FRIENDLY[authErr?.message ?? ''] ?? (authErr?.message ?? 'Registration failed.'))
-      setLoading(false); return
+      // 2. Create profile via API
+      const res = await fetch(`${WEB_API}/api/register/patient`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auth_user_id: authUserId,
+          first_name: firstName,
+          last_name: lastName,
+          date_of_birth: dob,
+          gender,
+          phone_number: phone,
+          email,
+          street_address: street,
+          city,
+          state_province: state,
+          postal_code: pincode,
+          country: 'India',
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Registration failed.')
+
+      // 3. Update user metadata with profile id
+      await supabase.auth.updateUser({ data: { profile_id: json.patient_id, role: 'patient' } })
+
+      router.replace('/(tabs)/')
+    } catch (e: any) {
+      setError(e.message ?? 'Something went wrong.')
+    } finally {
+      setLoading(false)
     }
-
-    // 2. Save profile via server API
-    setLoadingStep('Saving your profile…')
-    const res = await fetch(`${"https://rasbros.com"}/api/register/patient`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        auth_user_id: authData.user.id,
-        first_name: form.first_name,
-        last_name: form.last_name,
-        date_of_birth: form.date_of_birth,
-        gender: form.gender,
-        email: form.email.trim(),
-        mobile: form.mobile,
-        whatsapp_enabled: false,
-        communication_consent: ['WHATSAPP'],
-        city: form.city,
-        state: form.state,
-        pincode: form.pincode,
-        country: 'India',
-      }),
-    })
-
-    const result = await res.json()
-    if (!res.ok) {
-      setError(result.error ?? 'Failed to save profile.')
-      setLoading(false); return
-    }
-
-    await supabase.auth.updateUser({ data: { profile_id: result.patient_id } })
-    // Root layout auth listener will redirect to (tabs)
   }
+
+  const GENDERS = ['Male', 'Female', 'Other', 'Prefer not to say']
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Patient Registration</Text>
+        <Text style={styles.stepLabel}>Step {step} of 3</Text>
 
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable onPress={() => step === 1 ? router.back() : setStep(s => (s - 1) as Step)}>
-            <Text style={styles.back}>← Back</Text>
-          </Pressable>
-          <ProgressBar step={step} />
-        </View>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <View style={styles.card}>
+        {step === 1 && (
+          <View>
+            <Text style={styles.sectionTitle}>Account Details</Text>
+            <TextInput style={styles.input} placeholder="Email" placeholderTextColor="#aaa"
+              autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
+            <TextInput style={styles.input} placeholder="Password (min 8 chars)" placeholderTextColor="#aaa"
+              secureTextEntry value={password} onChangeText={setPassword} />
+            <TextInput style={styles.input} placeholder="Confirm Password" placeholderTextColor="#aaa"
+              secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />
+          </View>
+        )}
 
-          {/* ── STEP 1: Identity ── */}
-          {step === 1 && (
-            <View style={styles.fields}>
-              <Text style={styles.title}>Tell us about yourself</Text>
-
-              <View style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <Input label="First name" placeholder="Ramesh" value={form.first_name}
-                    onChangeText={t => set('first_name', t)} autoCapitalize="words" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Input label="Last name" placeholder="Kumar" value={form.last_name}
-                    onChangeText={t => set('last_name', t)} autoCapitalize="words" />
-                </View>
-              </View>
-
-              <Input label="Date of birth (YYYY-MM-DD)" placeholder="1990-01-15"
-                value={form.date_of_birth} onChangeText={t => set('date_of_birth', t)}
-                keyboardType="numbers-and-punctuation" />
-
-              <View style={styles.genderWrapper}>
-                <Text style={styles.fieldLabel}>Gender</Text>
-                <View style={styles.genderRow}>
-                  {GENDER_OPTIONS.map(([val, lbl]) => (
-                    <Pressable key={val} onPress={() => set('gender', val)}
-                      style={[styles.genderBtn, form.gender === val && styles.genderBtnActive]}>
-                      <Text style={[styles.genderLabel, form.gender === val && styles.genderLabelActive]}>
-                        {lbl}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              <Button label="Continue →" onPress={() => setStep(2)}
-                disabled={!form.first_name || !form.last_name || !form.date_of_birth || !form.gender} />
+        {step === 2 && (
+          <View>
+            <Text style={styles.sectionTitle}>Personal Information</Text>
+            <TextInput style={styles.input} placeholder="First Name" placeholderTextColor="#aaa"
+              value={firstName} onChangeText={setFirstName} />
+            <TextInput style={styles.input} placeholder="Last Name" placeholderTextColor="#aaa"
+              value={lastName} onChangeText={setLastName} />
+            <TextInput style={styles.input} placeholder="Date of Birth (YYYY-MM-DD)" placeholderTextColor="#aaa"
+              value={dob} onChangeText={setDob} />
+            <Text style={styles.label}>Gender</Text>
+            <View style={styles.genderRow}>
+              {GENDERS.map(g => (
+                <TouchableOpacity
+                  key={g}
+                  style={[styles.genderBtn, gender === g && styles.genderBtnActive]}
+                  onPress={() => setGender(g)}
+                >
+                  <Text style={[styles.genderBtnText, gender === g && styles.genderBtnTextActive]}>{g}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
-          )}
+            <TextInput style={styles.input} placeholder="Phone Number" placeholderTextColor="#aaa"
+              keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+          </View>
+        )}
 
-          {/* ── STEP 2: Contact ── */}
-          {step === 2 && (
-            <View style={styles.fields}>
-              <Text style={styles.title}>Contact & login</Text>
+        {step === 3 && (
+          <View>
+            <Text style={styles.sectionTitle}>Address</Text>
+            <TextInput style={styles.input} placeholder="Street Address" placeholderTextColor="#aaa"
+              value={street} onChangeText={setStreet} />
+            <TextInput style={styles.input} placeholder="City" placeholderTextColor="#aaa"
+              value={city} onChangeText={setCity} />
+            <TextInput style={styles.input} placeholder="State" placeholderTextColor="#aaa"
+              value={state} onChangeText={setState} />
+            <TextInput style={styles.input} placeholder="PIN Code" placeholderTextColor="#aaa"
+              keyboardType="numeric" value={pincode} onChangeText={setPincode} />
+          </View>
+        )}
 
-              <Input label="Email address" placeholder="you@example.com"
-                value={form.email} onChangeText={t => set('email', t)}
-                keyboardType="email-address" autoCapitalize="none" autoComplete="email" />
+        {step < 3 ? (
+          <TouchableOpacity style={styles.btn} onPress={nextStep}>
+            <Text style={styles.btnText}>Next →</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.btn} onPress={handleSubmit} disabled={loading}>
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Create Account</Text>}
+          </TouchableOpacity>
+        )}
 
-              <Input label="Password (min 8 characters)" placeholder="••••••••"
-                value={form.password} onChangeText={t => set('password', t)}
-                secureToggle autoComplete="new-password" />
-
-              <Input label="Mobile number" placeholder="+91 98765 43210"
-                value={form.mobile} onChangeText={t => set('mobile', t)}
-                keyboardType="phone-pad" />
-
-              <Button label="Continue →" onPress={() => setStep(3)}
-                disabled={!form.email || form.password.length < 8 || !form.mobile} />
-            </View>
-          )}
-
-          {/* ── STEP 3: Address ── */}
-          {step === 3 && (
-            <View style={styles.fields}>
-              <Text style={styles.title}>Your location</Text>
-              <Text style={styles.subtitle}>Used to find doctors near you</Text>
-
-              <Input label="City" placeholder="Chennai"
-                value={form.city} onChangeText={t => set('city', t)} autoCapitalize="words" />
-
-              <View style={styles.fieldWrapper}>
-                <Text style={styles.fieldLabel}>State</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}
-                  style={styles.stateScroll} contentContainerStyle={styles.stateScrollContent}>
-                  {INDIA_STATES.map(s => (
-                    <Pressable key={s} onPress={() => set('state', s)}
-                      style={[styles.stateChip, form.state === s && styles.stateChipActive]}>
-                      <Text style={[styles.stateChipText, form.state === s && styles.stateChipTextActive]}>
-                        {s}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-                {form.state ? <Text style={styles.stateSelected}>✓ {form.state}</Text> : null}
-              </View>
-
-              <Input label="PIN code" placeholder="600017"
-                value={form.pincode} onChangeText={t => set('pincode', t)}
-                keyboardType="number-pad" maxLength={6} />
-
-              {error ? (
-                <View style={styles.errorBox}>
-                  <Text style={styles.errorText}>⚠ {error}</Text>
-                </View>
-              ) : null}
-
-              <Button
-                label={loading ? loadingStep || 'Creating account…' : 'Create account ✓'}
-                onPress={handleSubmit}
-                loading={loading}
-                disabled={!form.city || !form.state || loading}
-              />
-
-              <Text style={styles.dpdp}>Protected under DPDP Act 2023 · Data stored in India</Text>
-            </View>
-          )}
-
-        </View>
+        {step > 1 && (
+          <TouchableOpacity onPress={() => setStep((step - 1) as Step)} style={styles.backBtn}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, backgroundColor: colors.brand[50], padding: 20, gap: 20 },
-  header: { gap: 12, paddingTop: 12 },
-  back: { fontSize: 14, color: colors.gray[500] },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+  container: { flex: 1, backgroundColor: '#f0f7f4' },
+  content: { padding: 24, paddingBottom: 48 },
+  title: { fontSize: 24, fontWeight: '700', color: '#1a6b3a', marginBottom: 4 },
+  stepLabel: { fontSize: 13, color: '#888', marginBottom: 20 },
+  sectionTitle: { fontSize: 17, fontWeight: '600', color: '#333', marginBottom: 12 },
+  error: { backgroundColor: '#fde8e8', color: '#c0392b', padding: 10, borderRadius: 8, marginBottom: 12, fontSize: 13 },
+  input: {
+    backgroundColor: '#fff', borderWidth: 1, borderColor: '#d0e8da',
+    borderRadius: 10, padding: 14, fontSize: 15, color: '#222', marginBottom: 12,
   },
-  fields: { gap: 16 },
-  title: { fontSize: 22, fontWeight: '700', color: colors.gray[900] },
-  subtitle: { fontSize: 13, color: colors.gray[500], marginTop: -8 },
-  row: { flexDirection: 'row', gap: 12 },
-  fieldLabel: { fontSize: 13, fontWeight: '500', color: colors.gray[700], marginBottom: 6 },
-  fieldWrapper: { gap: 6 },
-  genderWrapper: { gap: 8 },
-  genderRow: { flexDirection: 'row', gap: 8 },
-  genderBtn: {
-    flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5,
-    borderColor: colors.gray[200], alignItems: 'center', backgroundColor: colors.white,
-  },
-  genderBtnActive: { backgroundColor: colors.brand[600], borderColor: colors.brand[600] },
-  genderLabel: { fontSize: 14, fontWeight: '500', color: colors.gray[700] },
-  genderLabelActive: { color: colors.white },
-  stateScroll: { maxHeight: 44 },
-  stateScrollContent: { gap: 8, paddingRight: 8 },
-  stateChip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    borderWidth: 1.5, borderColor: colors.gray[200], backgroundColor: colors.white,
-  },
-  stateChipActive: { backgroundColor: colors.brand[600], borderColor: colors.brand[600] },
-  stateChipText: { fontSize: 13, color: colors.gray[600] },
-  stateChipTextActive: { color: colors.white, fontWeight: '600' },
-  stateSelected: { fontSize: 12, color: colors.brand[600], fontWeight: '500' },
-  errorBox: {
-    backgroundColor: colors.red[50], borderWidth: 1,
-    borderColor: colors.red[200], borderRadius: 10, padding: 12,
-  },
-  errorText: { fontSize: 13, color: colors.red[700] },
-  dpdp: { textAlign: 'center', fontSize: 11, color: colors.gray[400] },
+  label: { fontSize: 13, color: '#555', marginBottom: 6 },
+  genderRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  genderBtn: { borderWidth: 1, borderColor: '#d0e8da', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  genderBtnActive: { backgroundColor: '#1a6b3a', borderColor: '#1a6b3a' },
+  genderBtnText: { color: '#555', fontSize: 13 },
+  genderBtnTextActive: { color: '#fff' },
+  btn: { backgroundColor: '#1a6b3a', borderRadius: 10, padding: 15, alignItems: 'center', marginTop: 8 },
+  btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  backBtn: { marginTop: 16, alignItems: 'center' },
+  backText: { color: '#1a6b3a', fontSize: 14 },
 })

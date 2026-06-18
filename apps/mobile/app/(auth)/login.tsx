@@ -1,13 +1,10 @@
 import { useState } from 'react'
 import {
-  KeyboardAvoidingView, Platform, Pressable, ScrollView,
-  StyleSheet, Text, View,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from 'react-native'
 import { Link } from 'expo-router'
-import { supabase } from '@/lib/supabase'
-import Button from '@/components/ui/Button'
-import Input from '@/components/ui/Input'
-import { colors } from '@/lib/colors'
+import { supabase } from '../../lib/supabase'
 
 const FRIENDLY: Record<string, string> = {
   'Invalid login credentials': 'Incorrect email or password.',
@@ -17,127 +14,93 @@ const FRIENDLY: Record<string, string> = {
 export default function LoginScreen() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   async function handleLogin() {
-    setLoading(true); setError('')
-    const { error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
-    if (err) setError(FRIENDLY[err.message] ?? err.message)
+    setError('')
+    if (!email || !password) { setError('Please enter email and password.'); return }
+    setLoading(true)
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
-    // Navigation handled by root layout auth listener
+    if (error) setError(FRIENDLY[error.message] ?? error.message)
   }
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        {/* Logo / Brand */}
-        <View style={styles.brand}>
-          <Text style={styles.logo}>🌿</Text>
-          <Text style={styles.appName}>Ayushpathi</Text>
-          <Text style={styles.tagline}>India's AYUSH Healthcare Platform</Text>
-        </View>
+      <View style={styles.inner}>
+        <Text style={styles.logo}>🌿</Text>
+        <Text style={styles.title}>Ayushpathi</Text>
+        <Text style={styles.subtitle}>India's AYUSH Healthcare Platform</Text>
+        <Text style={styles.heading}>Sign in</Text>
 
-        {/* Form card */}
-        <View style={styles.card}>
-          <Text style={styles.title}>Sign in</Text>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
-          <View style={styles.fields}>
-            <Input
-              label="Email address"
-              placeholder="you@example.com"
-              value={email}
-              onChangeText={t => { setEmail(t); setError('') }}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-            />
-            <Input
-              label="Password"
-              placeholder="Your password"
-              value={password}
-              onChangeText={t => { setPassword(t); setError('') }}
-              secureToggle
-              autoComplete="current-password"
-            />
-          </View>
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          placeholderTextColor="#aaa"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
 
-          {error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>⚠ {error}</Text>
-            </View>
-          ) : null}
-
-          <Button
-            label="Sign in"
-            onPress={handleLogin}
-            loading={loading}
-            disabled={!email || password.length < 8}
+        <View style={styles.passwordRow}>
+          <TextInput
+            style={[styles.input, styles.passwordInput]}
+            placeholder="Password"
+            placeholderTextColor="#aaa"
+            secureTextEntry={!showPassword}
+            value={password}
+            onChangeText={setPassword}
           />
-
-          <Pressable style={styles.forgotRow}>
-            <Text style={styles.forgotText}>Forgot password?</Text>
-          </Pressable>
+          <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword(p => !p)}>
+            <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁'}</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Register link */}
-        <View style={styles.registerRow}>
-          <Text style={styles.registerText}>New to Ayushpathi? </Text>
-          <Link href="/(auth)/register" asChild>
-            <Pressable>
-              <Text style={styles.registerLink}>Create account</Text>
-            </Pressable>
-          </Link>
-        </View>
+        <TouchableOpacity style={styles.btn} onPress={handleLogin} disabled={loading}>
+          {loading
+            ? <ActivityIndicator color="#fff" />
+            : <Text style={styles.btnText}>Sign in</Text>}
+        </TouchableOpacity>
 
-        <Text style={styles.footer}>
-          Data stored in India · DPDP Act 2023
-        </Text>
-      </ScrollView>
+        <Link href="/(auth)/register" asChild>
+          <TouchableOpacity style={styles.link}>
+            <Text style={styles.linkText}>Don't have an account? Register</Text>
+          </TouchableOpacity>
+        </Link>
+      </View>
     </KeyboardAvoidingView>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: colors.brand[50],
-    padding: 24,
-    justifyContent: 'center',
-    gap: 24,
+  container: { flex: 1, backgroundColor: '#f0f7f4' },
+  inner: { flex: 1, justifyContent: 'center', padding: 28 },
+  logo: { fontSize: 48, textAlign: 'center', marginBottom: 4 },
+  title: { fontSize: 28, fontWeight: '700', color: '#1a6b3a', textAlign: 'center' },
+  subtitle: { fontSize: 13, color: '#666', textAlign: 'center', marginBottom: 32 },
+  heading: { fontSize: 22, fontWeight: '600', color: '#333', marginBottom: 16 },
+  error: { backgroundColor: '#fde8e8', color: '#c0392b', padding: 10, borderRadius: 8, marginBottom: 12, fontSize: 13 },
+  input: {
+    backgroundColor: '#fff', borderWidth: 1, borderColor: '#d0e8da',
+    borderRadius: 10, padding: 14, fontSize: 15, color: '#222', marginBottom: 12,
   },
-  brand: { alignItems: 'center', gap: 4 },
-  logo: { fontSize: 48 },
-  appName: { fontSize: 28, fontWeight: '700', color: colors.brand[700] },
-  tagline: { fontSize: 13, color: colors.gray[500] },
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 24,
-    gap: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+  passwordRow: { position: 'relative', marginBottom: 12 },
+  passwordInput: { marginBottom: 0, paddingRight: 48 },
+  eyeBtn: { position: 'absolute', right: 14, top: 14 },
+  eyeText: { fontSize: 18 },
+  btn: {
+    backgroundColor: '#1a6b3a', borderRadius: 10, padding: 15,
+    alignItems: 'center', marginTop: 8,
   },
-  title: { fontSize: 22, fontWeight: '700', color: colors.gray[900] },
-  fields: { gap: 14 },
-  errorBox: {
-    backgroundColor: colors.red[50],
-    borderWidth: 1,
-    borderColor: colors.red[200],
-    borderRadius: 10,
-    padding: 12,
-  },
-  errorText: { fontSize: 13, color: colors.red[700] },
-  forgotRow: { alignItems: 'center' },
-  forgotText: { fontSize: 13, color: colors.brand[600] },
-  registerRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
-  registerText: { fontSize: 14, color: colors.gray[500] },
-  registerLink: { fontSize: 14, fontWeight: '600', color: colors.brand[600] },
-  footer: { textAlign: 'center', fontSize: 11, color: colors.gray[400] },
+  btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  link: { marginTop: 20, alignItems: 'center' },
+  linkText: { color: '#1a6b3a', fontSize: 14 },
 })

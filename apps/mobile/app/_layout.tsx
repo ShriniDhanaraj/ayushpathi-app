@@ -1,29 +1,36 @@
 import { useEffect, useState } from 'react'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { Session } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase'
-import { View } from 'react-native'
+import { supabase } from '../lib/supabase'
 
 export default function RootLayout() {
-  const [session, setSession] = useState<Session | null | undefined>(undefined)
-  const segments = useSegments()
+  const [session, setSession] = useState<Session | null>(null)
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
+  const segments = useSegments()
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setLoading(false)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+
     return () => subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
-    if (session === undefined) return // still loading
-    const inAuth = segments[0] === '(auth)'
-    if (!session && !inAuth) router.replace('/(auth)/login')
-    if (session && inAuth) router.replace('/(tabs)')
-  }, [session, segments])
-
-  // Still loading session — render nothing (splash is still visible)
-  if (session === undefined) return <View style={{ flex: 1 }} />
+    if (loading) return
+    const inAuthGroup = segments[0] === '(auth)'
+    if (!session && !inAuthGroup) {
+      router.replace('/(auth)/login')
+    } else if (session && inAuthGroup) {
+      router.replace('/(tabs)/')
+    }
+  }, [session, segments, loading])
 
   return (
     <Stack screenOptions={{ headerShown: false }}>

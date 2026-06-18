@@ -1,51 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useState, useCallback } from 'react'
 import {
-  Pressable, RefreshControl, ScrollView,
-  StyleSheet, Text, View,
+  View, Text, StyleSheet, ScrollView,
+  TouchableOpacity, RefreshControl, ActivityIndicator,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
-import { supabase } from '@/lib/supabase'
-import { colors } from '@/lib/colors'
+import { useFocusEffect } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
+import { supabase } from '../../lib/supabase'
 
-interface Stats {
-  upcoming: number
-  activeDoctors: number
-  prescriptions: number
-  hasHealthProfile: boolean
-}
-
-interface StatCardProps {
-  icon: string; label: string; value: number | string; onPress: () => void
-}
-
-function StatCard({ icon, label, value, onPress }: StatCardProps) {
-  return (
-    <Pressable style={styles.statCard} onPress={onPress}>
-      <Text style={styles.statIcon}>{icon}</Text>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </Pressable>
-  )
-}
-
-function QuickAction({ icon, title, desc, onPress }: { icon: string; title: string; desc: string; onPress: () => void }) {
-  return (
-    <Pressable style={styles.quickAction} onPress={onPress}>
-      <Text style={styles.qaIcon}>{icon}</Text>
-      <View style={styles.qaText}>
-        <Text style={styles.qaTitle}>{title}</Text>
-        <Text style={styles.qaDesc}>{desc}</Text>
-      </View>
-      <Text style={styles.qaArrow}>›</Text>
-    </Pressable>
-  )
+type Appointment = {
+  id: string
+  appointment_date: string
+  appointment_time: string
+  status: string
+  doctor: { first_name: string; last_name: string; specialization: string } | null
 }
 
 export default function HomeScreen() {
-  const router = useRouter()
-  const [name, setName] = useState('')
-  const [stats, setStats] = useState<Stats>({ upcoming: 0, activeDoctors: 0, prescriptions: 0, hasHealthProfile: false })
+  const [userName, setUserName] = useState('')
+  const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -53,141 +25,132 @@ export default function HomeScreen() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { data: patient } = await supabase
-      .from('patient').select('id, first_name').eq('auth_user_id', user.id).single()
-    if (!patient) { setLoading(false); return }
-    setName(patient.first_name)
+    setUserName(user.user_metadata?.first_name ?? user.email?.split('@')[0] ?? 'Patient')
 
-    const today = new Date().toISOString().split('T')[0]
-    const [upcomingRes, doctorsRes, rxRes, profileRes] = await Promise.all([
-      supabase.from('appointment').select('id', { count: 'exact', head: true })
-        .eq('patient_id', patient.id).in('status', ['CONFIRMED','PENDING','BOOKED']).gte('appointment_date', today),
-      supabase.from('patient_doctor_consent').select('id', { count: 'exact', head: true })
-        .eq('patient_id', patient.id).eq('status', 'ACTIVE'),
-      supabase.from('prescription').select('consultation_id', { count: 'exact', head: true })
-        .eq('patient_id', patient.id),
-      supabase.from('patient_health_profile').select('patient_id').eq('patient_id', patient.id).maybeSingle(),
-    ])
+    const { data } = await supabase
+      .from('appointment')
+      .select('id, appointment_date, appointment_time, status, doctor:doctor_id(first_name, last_name, specialization)')
+      .eq('patient_auth_id', user.id)
+      .order('appointment_date', { ascending: true })
+      .limit(5)
 
-    setStats({
-      upcoming: upcomingRes.count ?? 0,
-      activeDoctors: doctorsRes.count ?? 0,
-      prescriptions: rxRes.count ?? 0,
-      hasHealthProfile: !!profileRes.data,
-    })
+    setAppointments((data as Appointment[]) ?? [])
     setLoading(false)
+  }
+
+  useFocusEffect(useCallback(() => { load() }, []))
+
+  async function onRefresh() {
+    setRefreshing(true)
+    await load()
     setRefreshing(false)
   }
 
-  useEffect(() => { load() }, [])
-
   async function handleSignOut() {
     await supabase.auth.signOut()
-    // Root layout auth listener handles redirect
+  }
+
+  const statusColor: Record<string, string> = {
+    SCHEDULED: '#2980b9',
+    COMPLETED: '#27ae60',
+    CANCELLED: '#e74c3c',
+    PENDING: '#f39c12',
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.gray[50] }}>
+    <ScrollView
+      style={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1a6b3a" />}
+    >
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>
-            {loading ? 'Loading…' : `Namaste, ${name} 🙏`}
-          </Text>
-          <Text style={styles.subGreeting}>Ayushpathi Patient App</Text>
+          <Text style={styles.greeting}>Namaste 🙏</Text>
+          <Text style={styles.userName}>{userName}</Text>
         </View>
-        <Pressable onPress={handleSignOut} style={styles.signOutBtn}>
-          <Text style={styles.signOutText}>Sign out</Text>
-        </Pressable>
+        <TouchableOpacity onPress={handleSignOut} style={styles.signOutBtn}>
+          <Ionicons name="log-out-outline" size={22} color="#fff" />
+        </TouchableOpacity>
       </View>
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load() }} tintColor={colors.brand[600]} />}
-      >
-        {/* Health profile nudge */}
-        {!loading && !stats.hasHealthProfile && (
-          <View style={styles.nudge}>
-            <Text style={styles.nudgeIcon}>⚠️</Text>
-            <View style={styles.nudgeText}>
-              <Text style={styles.nudgeTitle}>Complete your health profile</Text>
-              <Text style={styles.nudgeDesc}>Add conditions, allergies & medications for better care</Text>
+      {/* Stats */}
+      <View style={styles.statsRow}>
+        <View style={styles.statCard}>
+          <Text style={styles.statNum}>{appointments.filter(a => a.status === 'SCHEDULED').length}</Text>
+          <Text style={styles.statLabel}>Upcoming</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statNum}>{appointments.filter(a => a.status === 'COMPLETED').length}</Text>
+          <Text style={styles.statLabel}>Completed</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statNum}>{appointments.length}</Text>
+          <Text style={styles.statLabel}>Total</Text>
+        </View>
+      </View>
+
+      {/* Appointments */}
+      <Text style={styles.sectionTitle}>Your Appointments</Text>
+
+      {loading ? (
+        <ActivityIndicator color="#1a6b3a" style={{ marginTop: 32 }} />
+      ) : appointments.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyIcon}>📅</Text>
+          <Text style={styles.emptyText}>No appointments yet.</Text>
+          <Text style={styles.emptySub}>Visit rasbros.com to book your first consultation.</Text>
+        </View>
+      ) : (
+        appointments.map(apt => (
+          <View key={apt.id} style={styles.aptCard}>
+            <View style={styles.aptHeader}>
+              <Text style={styles.aptDoctor}>
+                Dr. {apt.doctor?.first_name} {apt.doctor?.last_name}
+              </Text>
+              <View style={[styles.statusBadge, { backgroundColor: statusColor[apt.status] ?? '#999' }]}>
+                <Text style={styles.statusText}>{apt.status}</Text>
+              </View>
             </View>
+            <Text style={styles.aptSpec}>{apt.doctor?.specialization}</Text>
+            <Text style={styles.aptDate}>
+              {apt.appointment_date} at {apt.appointment_time}
+            </Text>
           </View>
-        )}
-
-        {/* Stats */}
-        <View style={styles.statsRow}>
-          <StatCard icon="📅" label="Upcoming" value={loading ? '–' : stats.upcoming}
-            onPress={() => {}} />
-          <StatCard icon="👨‍⚕️" label="My Doctors" value={loading ? '–' : stats.activeDoctors}
-            onPress={() => {}} />
-          <StatCard icon="💊" label="Prescriptions" value={loading ? '–' : stats.prescriptions}
-            onPress={() => {}} />
-        </View>
-
-        {/* Quick actions */}
-        <Text style={styles.sectionTitle}>Quick actions</Text>
-        <View style={styles.quickActions}>
-          <QuickAction icon="🔍" title="Find doctors near me"
-            desc="Search by specialization" onPress={() => {}} />
-          <QuickAction icon="📋" title="Health records"
-            desc="Consultations & prescriptions" onPress={() => {}} />
-          <QuickAction icon="💚" title="Health profile"
-            desc="Conditions, allergies, medications" onPress={() => {}} />
-          <QuickAction icon="🔒" title="Consent & privacy"
-            desc="Manage doctor access" onPress={() => {}} />
-        </View>
-
-        <Text style={styles.footer}>Data stored securely in India · DPDP Act 2023</Text>
-      </ScrollView>
-    </SafeAreaView>
+        ))
+      )}
+    </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f0f7f4' },
   header: {
+    backgroundColor: '#1a6b3a', padding: 24, paddingTop: 56,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 16,
-    backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.gray[100],
   },
-  greeting: { fontSize: 18, fontWeight: '700', color: colors.gray[900] },
-  subGreeting: { fontSize: 12, color: colors.gray[500], marginTop: 2 },
-  signOutBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
-    borderWidth: 1, borderColor: colors.gray[200] },
-  signOutText: { fontSize: 13, color: colors.gray[500] },
-  scroll: { padding: 16, gap: 16 },
-  nudge: {
-    backgroundColor: colors.amber[50], borderWidth: 1, borderColor: colors.amber[200],
-    borderRadius: 14, padding: 14, flexDirection: 'row', gap: 12, alignItems: 'flex-start',
-  },
-  nudgeIcon: { fontSize: 22 },
-  nudgeText: { flex: 1, gap: 2 },
-  nudgeTitle: { fontSize: 14, fontWeight: '600', color: colors.amber[900] },
-  nudgeDesc: { fontSize: 12, color: colors.amber[800], lineHeight: 16 },
-  statsRow: { flexDirection: 'row', gap: 10 },
+  greeting: { color: '#a8d5b5', fontSize: 13 },
+  userName: { color: '#fff', fontSize: 20, fontWeight: '700', marginTop: 2 },
+  signOutBtn: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8, padding: 8 },
+  statsRow: { flexDirection: 'row', padding: 16, gap: 12 },
   statCard: {
-    flex: 1, backgroundColor: colors.white, borderRadius: 14, padding: 14,
-    alignItems: 'center', gap: 4,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+    flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 16,
+    alignItems: 'center', borderWidth: 1, borderColor: '#d0e8da',
   },
-  statIcon: { fontSize: 22 },
-  statValue: { fontSize: 24, fontWeight: '700', color: colors.gray[900] },
-  statLabel: { fontSize: 11, color: colors.gray[500], textAlign: 'center' },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.gray[900] },
-  quickActions: { gap: 10 },
-  quickAction: {
-    backgroundColor: colors.white, borderRadius: 14, padding: 16,
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04, shadowRadius: 4, elevation: 2,
+  statNum: { fontSize: 24, fontWeight: '700', color: '#1a6b3a' },
+  statLabel: { fontSize: 11, color: '#888', marginTop: 2 },
+  sectionTitle: { fontSize: 17, fontWeight: '700', color: '#333', paddingHorizontal: 16, marginBottom: 12 },
+  aptCard: {
+    backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 12,
+    borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#d0e8da',
   },
-  qaIcon: { fontSize: 26 },
-  qaText: { flex: 1, gap: 2 },
-  qaTitle: { fontSize: 14, fontWeight: '600', color: colors.gray[900] },
-  qaDesc: { fontSize: 12, color: colors.gray[500] },
-  qaArrow: { fontSize: 20, color: colors.gray[300] },
-  footer: { textAlign: 'center', fontSize: 11, color: colors.gray[400], paddingBottom: 8 },
+  aptHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  aptDoctor: { fontSize: 15, fontWeight: '700', color: '#1a6b3a' },
+  statusBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  statusText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+  aptSpec: { fontSize: 13, color: '#555', marginBottom: 4 },
+  aptDate: { fontSize: 12, color: '#888' },
+  emptyBox: { alignItems: 'center', padding: 40 },
+  emptyIcon: { fontSize: 40, marginBottom: 12 },
+  emptyText: { fontSize: 16, fontWeight: '600', color: '#555' },
+  emptySub: { fontSize: 12, color: '#888', textAlign: 'center', marginTop: 6 },
 })
