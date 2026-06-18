@@ -26,7 +26,7 @@ export default function PatientRegisterScreen() {
   const [lastName, setLastName] = useState('')
   const [dob, setDob] = useState('')
   const [gender, setGender] = useState('')
-  const [phone, setPhone] = useState('')
+  const [mobile, setMobile] = useState('')
 
   // Step 3 — address
   const [street, setStreet] = useState('')
@@ -42,7 +42,7 @@ export default function PatientRegisterScreen() {
       if (password.length < 8) { setError('Password must be at least 8 characters.'); return }
     }
     if (step === 2) {
-      if (!firstName || !lastName || !dob || !gender || !phone) { setError('All fields required.'); return }
+      if (!firstName || !lastName || !dob || !gender || !mobile) { setError('All fields required.'); return }
     }
     if (step < 3) setStep((step + 1) as Step)
   }
@@ -58,7 +58,7 @@ export default function PatientRegisterScreen() {
       const authUserId = authData.user?.id
       if (!authUserId) throw new Error('Failed to create account.')
 
-      // 2. Create profile via API
+      // 2. Create profile via API — field names match server route exactly
       const res = await fetch(`${WEB_API}/api/register/patient`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -68,12 +68,12 @@ export default function PatientRegisterScreen() {
           last_name: lastName,
           date_of_birth: dob,
           gender,
-          phone_number: phone,
+          mobile,
           email,
-          street_address: street,
+          street,
           city,
-          state_province: state,
-          postal_code: pincode,
+          state,
+          pincode,
           country: 'India',
         }),
       })
@@ -134,8 +134,8 @@ export default function PatientRegisterScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            <TextInput style={styles.input} placeholder="Phone Number" placeholderTextColor="#aaa"
-              keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+            <TextInput style={styles.input} placeholder="Mobile Number (+91...)" placeholderTextColor="#aaa"
+              keyboardType="phone-pad" value={mobile} onChangeText={setMobile} />
           </View>
         )}
 
