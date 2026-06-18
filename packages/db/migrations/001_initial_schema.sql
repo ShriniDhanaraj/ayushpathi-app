@@ -386,3 +386,65 @@ CREATE TRIGGER trg_doctor_updated_at BEFORE UPDATE ON doctor FOR EACH ROW EXECUT
 CREATE TRIGGER trg_hospital_updated_at BEFORE UPDATE ON hospital FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_appointment_updated_at BEFORE UPDATE ON appointment FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_consultation_updated_at BEFORE UPDATE ON consultation FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- =============================================================
+-- DPDP ACT 2023 COMPLIANCE ADDITIONS
+-- India Digital Personal Data Protection Act, 2023
+-- Health data = Sensitive Personal Data (highest protection tier)
+-- =============================================================
+
+-- 1. Right to Erasure — patient-initiated deletion requests
+CREATE TABLE data_erasure_request (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  patient_id      UUID NOT NULL REFERENCES patient(id),
+  requested_at    TIMESTAMPTZ DEFAULT NOW(),
+  reason          TEXT,
+  status          TEXT DEFAULT 'PENDING',  -- PENDING | PROCESSING | COMPLETED
+  processed_at    TIMESTAMPTZ,
+  processed_by    UUID                     -- Ayushpathi Admin
+);
+
+-- 2. Soft-delete on patient (30-day grace before hard delete)
+ALTER TABLE patient ADD COLUMN deleted_at TIMESTAMPTZ DEFAULT NULL;
+ALTER TABLE patient ADD COLUMN deletion_scheduled_at TIMESTAMPTZ DEFAULT NULL;
+CREATE INDEX idx_patient_deleted ON patient(deleted_at) WHERE deleted_at IS NOT NULL;
+
+-- 3. Guardian consent for minors (under 18)
+ALTER TABLE patient ADD COLUMN is_minor BOOLEAN GENERATED ALWAYS AS (
+  date_of_birth > CURRENT_DATE - INTERVAL '18 years'
+) STORED;
+ALTER TABLE patient ADD COLUMN guardian_name TEXT;
+ALTER TABLE patient ADD COLUMN guardian_mobile TEXT;
+ALTER TABLE patient ADD COLUMN guardian_consent_at TIMESTAMPTZ;
+
+-- 4. Data portability — track export requests
+CREATE TABLE data_export_request (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  patient_id      UUID NOT NULL REFERENCES patient(id),
+  requested_at    TIMESTAMPTZ DEFAULT NOW(),
+  export_url      TEXT,                    -- signed URL to download, expires in 24hr
+  expires_at      TIMESTAMPTZ,
+  status          TEXT DEFAULT 'PENDING'   -- PENDING | READY | EXPIRED
+);
+
+-- 5. Data breach log (72-hour DPDP reporting obligation)
+CREATE TABLE breach_log (
+  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  detected_at         TIMESTAMPTZ DEFAULT NOW(),
+  description         TEXT NOT NULL,
+  affected_count      INTEGER,
+  severity            TEXT,               -- LOW | MEDIUM | HIGH | CRITICAL
+  reported_to_dpb_at  TIMESTAMPTZ,        -- Data Protection Board notification timestamp
+  resolved_at         TIMESTAMPTZ,
+  reported_by         UUID
+);
+
+-- 6. Consent must be re-confirmed if consent terms change (versioning)
+ALTER TABLE patient_doctor_consent ADD COLUMN consent_version INTEGER DEFAULT 1;
+ALTER TABLE patient_doctor_consent ADD COLUMN purpose TEXT DEFAULT 'medical_consultation';
+
+-- =============================================================
+-- RLS: Ensure deleted patients are invisible platform-wide
+-- =============================================================
+CREATE POLICY hide_deleted_patients ON patient
+  FOR SELECT USING (deleted_at IS NULL);
