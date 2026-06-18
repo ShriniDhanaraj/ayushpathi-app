@@ -1,6 +1,10 @@
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 
+interface DoctorRow { first_name: string; last_name: string; ayush_specialization: string }
+interface MedicineRow { name: string; dosage: string; frequency: string; duration: string }
+interface PrescriptionRow { medicines: MedicineRow[]; instructions?: string; is_repeat: boolean }
+
 export default async function MyRecordsPage() {
   const supabase = createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -49,7 +53,7 @@ export default async function MyRecordsPage() {
                 <div>
                   <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Known Conditions</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {healthProfile.known_conditions.map((c: string) => (
+                    {(healthProfile.known_conditions as string[]).map((c: string) => (
                       <span key={c} className="px-2.5 py-1 bg-red-50 text-red-700 rounded-full text-xs">{c}</span>
                     ))}
                   </div>
@@ -59,7 +63,7 @@ export default async function MyRecordsPage() {
                 <div>
                   <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Allergies</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {healthProfile.allergies.map((a: string) => (
+                    {(healthProfile.allergies as string[]).map((a: string) => (
                       <span key={a} className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs">{a}</span>
                     ))}
                   </div>
@@ -69,7 +73,7 @@ export default async function MyRecordsPage() {
                 <div className="col-span-2">
                   <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Current Medications</p>
                   <div className="space-y-1">
-                    {healthProfile.current_medications.map((m: { name: string; dosage: string; frequency: string }) => (
+                    {(healthProfile.current_medications as MedicineRow[]).map((m) => (
                       <p key={m.name} className="text-gray-700">{m.name} — {m.dosage}, {m.frequency}</p>
                     ))}
                   </div>
@@ -89,8 +93,8 @@ export default async function MyRecordsPage() {
           ) : (
             <div className="space-y-4">
               {consultations.map(c => {
-                const doc = c.doctor as { first_name: string; last_name: string; ayush_specialization: string } | null
-                const rx = c.prescription as { medicines: Array<{ name: string; dosage: string; frequency: string; duration: string }>; instructions?: string; is_repeat: boolean }[] | null
+                const doc = (c.doctor as unknown) as DoctorRow | null
+                const rx = (c.prescription as unknown) as PrescriptionRow[] | null
                 return (
                   <div key={c.id} className="card p-5 space-y-4">
                     <div className="flex justify-between items-start">
