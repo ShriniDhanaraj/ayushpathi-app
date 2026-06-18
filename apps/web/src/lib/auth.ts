@@ -1,5 +1,11 @@
 import { getSupabaseClient } from './supabase'
-import type { UserRole } from '../../../packages/shared/constants'
+
+export type UserRole =
+  | 'patient'
+  | 'doctor'
+  | 'receptionist'
+  | 'hospital_admin'
+  | 'ayushpathi_admin'
 
 export type AuthUser = {
   id: string
@@ -16,7 +22,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   return {
     id: user.id,
     email: user.email!,
-    role: user.user_metadata?.role ?? 'patient',
+    role: (user.user_metadata?.role ?? 'patient') as UserRole,
     profileId: user.user_metadata?.profile_id ?? null,
   }
 }
@@ -35,3 +41,4 @@ export const ROLE_DASHBOARD: Record<UserRole, string> = {
   hospital_admin:    '/dashboard/admin',
   ayushpathi_admin:  '/dashboard/admin',
 }
+
