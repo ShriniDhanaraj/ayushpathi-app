@@ -21,6 +21,25 @@ interface Appointment {
   doctor: { id: string; first_name: string; last_name: string; ayush_specialization: string } | null
 }
 
+
+// ── Caller Identity types ─────────────────────────────────────────
+type IdentifyStep = 'form' | 'confirm' | 'done'
+interface IdentifyResult {
+  found: boolean
+  type?: 'patient' | 'doctor'
+  record_id?: string
+  masked_address?: string
+  error?: string
+}
+interface ConfirmedProfile {
+  id: string
+  first_name: string
+  last_name: string
+  mobile: string
+  email: string
+  address: string | null
+}
+
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   BOOKED:      { label: 'Booked',      color: 'bg-blue-100 text-blue-700' },
   CONFIRMED:   { label: 'Confirmed',   color: 'bg-indigo-100 text-indigo-700' },
@@ -102,6 +121,63 @@ export default function ReceptionistPage() {
     openWhatsApp(apt.patient.mobile, msg)
   }
 
+
+  // ── Caller identity lookup ────────────────────────────────────
+  const [identifyOpen, setIdentifyOpen] = useState(false)
+  const [identifyStep, setIdentifyStep] = useState<IdentifyStep>('form')
+  const [identifyForm, setIdentifyForm] = useState({ mobile: '', date_of_birth: '', first_name: '', last_name: '' })
+  const [identifyResult, setIdentifyResult] = useState<IdentifyResult | null>(null)
+  const [identifyAddressInput, setIdentifyAddressInput] = useState('')
+  const [identifyProfile, setIdentifyProfile] = useState<ConfirmedProfile | null>(null)
+  const [identifyLoading, setIdentifyLoading] = useState(false)
+  const [identifyWarning, setIdentifyWarning] = useState<string | null>(null)
+
+  async function handleIdentify() {
+    setIdentifyLoading(true)
+    const res = await fetch('/api/receptionist/identify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(identifyForm),
+    })
+    const json: IdentifyResult = await res.json()
+    setIdentifyResult(json)
+    setIdentifyLoading(false)
+    if (json.found) setIdentifyStep('confirm')
+  }
+
+  async function handleConfirm() {
+    if (!identifyResult?.record_id || !identifyResult?.type) return
+    setIdentifyLoading(true)
+    const res = await fetch('/api/receptionist/identify/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        record_id: identifyResult.record_id,
+        type: identifyResult.type,
+        address_input: identifyAddressInput,
+      }),
+    })
+    const json = await res.json()
+    setIdentifyLoading(false)
+    if (json.confirmed) {
+      setIdentifyProfile(json.profile)
+      setIdentifyWarning(json.warning ?? null)
+      setIdentifyStep('done')
+    } else {
+      alert('Address does not match. Please ask the caller to confirm their details.')
+    }
+  }
+
+  function resetIdentify() {
+    setIdentifyOpen(false)
+    setIdentifyStep('form')
+    setIdentifyForm({ mobile: '', date_of_birth: '', first_name: '', last_name: '' })
+    setIdentifyResult(null)
+    setIdentifyAddressInput('')
+    setIdentifyProfile(null)
+    setIdentifyWarning(null)
+  }
+
   const stats = {
     total: appointments.length,
     arrived: appointments.filter(a => ['ARRIVED','IN_PROGRESS'].includes(a.status)).length,
@@ -116,11 +192,17 @@ export default function ReceptionistPage() {
     <div className="max-w-5xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-green-800">Reception Desk</h1>
-        <Link href="/receptionist/book">
-          <button className="bg-green-700 text-white px-4 py-2 rounded hover:bg-green-800 text-sm">
-            + Book Appointment
+        <div className="flex gap-2">
+          <button onClick={() => setIdentifyOpen(true)}
+            className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 text-sm">
+            🔍 Identify Caller
           </button>
-        </Link>
+          <Link href="/receptionist/book">
+            <button className="bg-green-700 text-white px-4 py-2 rounded hover:bg-green-800 text-sm">
+              + Book Appointment
+            </button>
+          </Link>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 mb-6">
@@ -222,6 +304,114 @@ export default function ReceptionistPage() {
           })}
         </div>
       )}
+      {/* ── Identify Caller Modal ─────────────────────────────── */}
+      {identifyOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold text-gray-800">
+                {identifyStep === 'form' && '🔍 Identify Caller'}
+                {identifyStep === 'confirm' && '🔒 Confirm Identity (GDPR)'}
+                {identifyStep === 'done' && '✅ Caller Identified'}
+              </h2>
+              <button onClick={resetIdentify} className="text-gray-400 hover:text-gray-600 text-xl">✕</button>
+            </div>
+
+            {identifyStep === 'form' && (
+              <div className="space-y-3">
+                <p className="text-xs text-gray-500">Ask the caller for these 4 details:</p>
+                {[
+                  { key: 'first_name', label: 'First Name', type: 'text', placeholder: 'Raj' },
+                  { key: 'last_name', label: 'Last Name', type: 'text', placeholder: 'Kumar' },
+                  { key: 'date_of_birth', label: 'Date of Birth', type: 'date', placeholder: '' },
+                  { key: 'mobile', label: 'WhatsApp Mobile', type: 'tel', placeholder: '9876543210' },
+                ].map(f => (
+                  <div key={f.key}>
+                    <label className="text-xs font-medium text-gray-600 block mb-0.5">{f.label}</label>
+                    <input
+                      type={f.type}
+                      placeholder={f.placeholder}
+                      value={identifyForm[f.key as keyof typeof identifyForm]}
+                      onChange={e => setIdentifyForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                      className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                ))}
+                {identifyResult?.found === false && (
+                  <p className="text-xs text-red-600 bg-red-50 rounded px-3 py-2">
+                    {identifyResult.error ?? 'No record found. Check spelling or mobile number.'}
+                  </p>
+                )}
+                <button onClick={handleIdentify} disabled={identifyLoading}
+                  className="w-full bg-indigo-600 text-white rounded py-2 text-sm hover:bg-indigo-700 disabled:opacity-50 mt-1">
+                  {identifyLoading ? 'Searching…' : 'Find Record'}
+                </button>
+              </div>
+            )}
+
+            {identifyStep === 'confirm' && identifyResult && (
+              <div className="space-y-3">
+                <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
+                  <p className="font-medium mb-1">GDPR Verification Required</p>
+                  <p>Ask the caller: <em>"Can you confirm the first line of your registered address?"</em></p>
+                  <p className="mt-2 text-xs text-gray-500">Our record starts with: <strong>{identifyResult.masked_address}</strong></p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 block mb-0.5">Caller's address (type what they say)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 42 Gandhi Street"
+                    value={identifyAddressInput}
+                    onChange={e => setIdentifyAddressInput(e.target.value)}
+                    className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setIdentifyStep('form')} className="flex-1 border rounded py-2 text-sm text-gray-600 hover:bg-gray-50">
+                    ← Back
+                  </button>
+                  <button onClick={handleConfirm} disabled={identifyLoading || !identifyAddressInput.trim()}
+                    className="flex-1 bg-indigo-600 text-white rounded py-2 text-sm hover:bg-indigo-700 disabled:opacity-50">
+                    {identifyLoading ? 'Verifying…' : 'Confirm Identity'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {identifyStep === 'done' && identifyProfile && (
+              <div className="space-y-3">
+                {identifyWarning && (
+                  <p className="text-xs bg-yellow-50 text-yellow-700 rounded px-3 py-2">{identifyWarning}</p>
+                )}
+                <div className="bg-green-50 border border-green-200 rounded p-4 space-y-1.5">
+                  <p className="text-sm"><span className="text-gray-500 text-xs">Name</span><br/>
+                    <strong>{identifyProfile.first_name} {identifyProfile.last_name}</strong>
+                    <span className="ml-2 text-xs text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full">
+                      {identifyResult?.type === 'doctor' ? 'Doctor' : 'Patient'}
+                    </span>
+                  </p>
+                  <p className="text-sm"><span className="text-gray-500 text-xs">Mobile</span><br/>{identifyProfile.mobile}</p>
+                  <p className="text-sm"><span className="text-gray-500 text-xs">Email</span><br/>{identifyProfile.email}</p>
+                  {identifyProfile.address && (
+                    <p className="text-sm"><span className="text-gray-500 text-xs">Address</span><br/>{identifyProfile.address}</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => identifyProfile.mobile && openWhatsApp(identifyProfile.mobile, `Hi ${identifyProfile.first_name}, this is Ayushpathi reception. How can we help you today?`)}
+                    className="flex-1 bg-[#25D366] text-white rounded py-2 text-sm hover:bg-[#1ea352]">
+                    💬 Open WhatsApp
+                  </button>
+                  <button onClick={resetIdentify} className="flex-1 border rounded py-2 text-sm text-gray-600 hover:bg-gray-50">
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
