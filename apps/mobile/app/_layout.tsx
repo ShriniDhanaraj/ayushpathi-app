@@ -101,6 +101,8 @@ export default function RootLayout() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="pending-approval" />
       <Stack.Screen name="doctor-dashboard" />
+      <Stack.Screen name="doctor-availability" />
+      <Stack.Screen name="consultation" />
     </Stack>
   )
 }
