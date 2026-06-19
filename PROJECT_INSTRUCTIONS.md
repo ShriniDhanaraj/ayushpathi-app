@@ -10,8 +10,8 @@ Ayushpathi: India-based AYUSH (Ayurveda, Yoga, Unani, Siddha, Homeopathy) health
 - **Live URL:** https://www.rasbros.com (Vercel, auto-deploys on push to main)
 - **WhatsApp:** wa.me deep links only — NO third-party API
 
-## Current State — Session 8 Starting Point
-**Last commit:** `240e8a8` — multilang files written to workspace but NOT yet pushed to GitHub (first task of Session 8)  
+## Current State — Session 9 Starting Point
+**Last commit:** `38ae925` — doctor profile page, web booking, hospital admin verify UI, near-me fix  
 **PAT:** ghp_REDACTED_SEE_COWORK_PROJECT_FOLDER (valid until 16 Jul 2026)  
 **Supabase URL:** https://urrccvyiibqcfqfjgedp.supabase.co  
 **Anon key:** eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVycmNjdnlpaWJxY2ZxZmpnZWRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3ODQ0MTUsImV4cCI6MjA5NzM2MDQxNX0.9QBFB174ZmbmpdnsR8c7pA_ZaE3Xt1bhDBNDbnlSc2s
@@ -143,6 +143,11 @@ patient_3        = e1000000-0000-0000-0000-000000000003  Mohan Pillai
 ✅ Patient family relationship (`patient_family` table, mobile tab, doctor view)
 ✅ Push notification scaffolding (device_push_token table)
 ✅ **Multilingual support** (Session 7) — 14 languages, patient 3-field language prefs, doctor ui_language, i18n registration+login (9 languages), doctor search language filter, 8 demo patients + 8 demo doctors with regional language profiles
+✅ **Near-me search fixed** (Session 8) — corrected RPC params/columns, seeded lat/lng for all 14 doctors
+✅ **Doctor public profile page** (Session 8) — `/doctor/[id]` with specialization, languages, availability, hospitals, Book button
+✅ **Web appointment booking doctor pre-select** (Session 8) — `/appointments/new?doctor=[id]` skips to slot picker
+✅ **Hospital admin doctor verification UI** (Session 8) — approve/reject pending doctors with inline rejection reason
+✅ **WhatsApp numbers SQL** (Session 8) — `20260619_whatsapp_populate.sql` ready to run
 
 ## Multilingual Demo Users (Session 7 seed, password `Ayush@2026!`)
 | Email | Name | UI Lang | Consult Lang |
@@ -164,18 +169,15 @@ patient_3        = e1000000-0000-0000-0000-000000000003  Mohan Pillai
 | dr.padmavathi@demo.ayushpathi.in | Dr. Padmavathi Reddy (AYU) | TE | speaks TE, HI, EN |
 | dr.debabrata@demo.ayushpathi.in | Dr. Debabrata Sen (HOM) | BN | speaks BN, EN, HI |
 
-## What's NOT Built Yet — Session 8 Priorities
-1. **Commit Session 7 files to GitHub** — 11 new/updated files in workspace, not yet pushed
-2. **Fix Near-Me search (0 doctors)** — run lat/lng address addendum in `ayushpathi_seed.sql`
-3. **Doctor profile public page** (`/doctor/[id]`) — specialization, languages, availability, book button
-4. **Web appointment booking** — currently mobile-only
-5. **Hospital admin doctor verification UI** — approve/reject pending doctors (API exists, UI missing)
-6. **Teleconsult join link** — video URL for TELECONSULT appointments
-7. **Populate WhatsApp numbers** — hospital + hospital_group rows have NULL whatsapp_number
-8. **Push notification wiring** — next-visit reminders, status change triggers
-9. **SMS/OTP login** — replace email with mobile OTP
-10. **OCR prescription pipeline** — image upload → parse → prefill form
-11. **Mobile: install picker deps** — `npx expo install @react-native-picker/picker @react-native-async-storage/async-storage`
+## What's NOT Built Yet — Session 9 Priorities
+1. **Teleconsult join link** — video URL for TELECONSULT appointments (generate on booking, show to patient + doctor)
+2. **Push notification wiring** — save token on login, send next-visit reminders + status-change alerts
+3. **SMS/OTP login** — replace email+password with Supabase phone OTP for patients
+4. **OCR prescription pipeline** — `entry_method='SCANNED'`, image upload → OCR → prefill form
+5. **Patient dashboard web page** (`/dashboard/patient`) — appointments list view
+6. **Doctor general listing page** (`/doctors`) — for users who don't share location
+7. **Global admin web UI** — dedicated page for GLOBAL scope admins
+8. **Real WhatsApp numbers** — replace dummy `9194440000xx` with real clinic numbers before go-live
 
 ## API Bugs Fixed (do not re-introduce)
 - `/api/appointments/[id]/cancel` — join patient table for auth_user_id (not patient_auth_id)
