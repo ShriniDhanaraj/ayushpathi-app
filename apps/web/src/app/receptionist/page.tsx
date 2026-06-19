@@ -1,6 +1,12 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import {
+  openWhatsApp,
+  buildAppointmentConfirmation,
+  buildAppointmentReminder,
+  buildWalkInToken,
+} from '@/lib/whatsapp'
 
 interface Appointment {
   id: string
@@ -30,9 +36,7 @@ const NEXT_STATUS: Record<string, string[]> = {
   CONFIRMED:   ['ARRIVED', 'NO_SHOW', 'CANCELLED'],
   ARRIVED:     ['IN_PROGRESS', 'NO_SHOW'],
   IN_PROGRESS: ['COMPLETED'],
-  COMPLETED:   [],
-  NO_SHOW:     [],
-  CANCELLED:   [],
+  COMPLETED: [], NO_SHOW: [], CANCELLED: [],
 }
 
 export default function ReceptionistPage() {
@@ -62,12 +66,51 @@ export default function ReceptionistPage() {
     load()
   }
 
+  function sendConfirmationWA(apt: Appointment) {
+    if (!apt.patient?.mobile) return
+    const msg = buildAppointmentConfirmation({
+      patientName: `${apt.patient.first_name} ${apt.patient.last_name}`,
+      doctorName: `${apt.doctor?.first_name} ${apt.doctor?.last_name}`,
+      specialization: apt.doctor?.ayush_specialization,
+      date: apt.appointment_date,
+      startTime: apt.start_time,
+      type: apt.type as 'F2F' | 'TELECONSULT',
+      appointmentId: apt.id,
+    })
+    openWhatsApp(apt.patient.mobile, msg)
+  }
+
+  function sendReminderWA(apt: Appointment) {
+    if (!apt.patient?.mobile) return
+    const msg = buildAppointmentReminder({
+      patientName: `${apt.patient.first_name} ${apt.patient.last_name}`,
+      doctorName: `${apt.doctor?.first_name} ${apt.doctor?.last_name}`,
+      date: apt.appointment_date,
+      startTime: apt.start_time,
+      appointmentId: apt.id,
+    })
+    openWhatsApp(apt.patient.mobile, msg)
+  }
+
+  function sendWalkInTokenWA(apt: Appointment, position: number) {
+    if (!apt.patient?.mobile) return
+    const msg = buildWalkInToken({
+      patientName: `${apt.patient.first_name} ${apt.patient.last_name}`,
+      doctorName: `${apt.doctor?.first_name} ${apt.doctor?.last_name}`,
+      position,
+    })
+    openWhatsApp(apt.patient.mobile, msg)
+  }
+
   const stats = {
     total: appointments.length,
-    arrived: appointments.filter(a => a.status === 'ARRIVED' || a.status === 'IN_PROGRESS').length,
+    arrived: appointments.filter(a => ['ARRIVED','IN_PROGRESS'].includes(a.status)).length,
     completed: appointments.filter(a => a.status === 'COMPLETED').length,
-    pending: appointments.filter(a => ['BOOKED', 'CONFIRMED'].includes(a.status)).length,
+    pending: appointments.filter(a => ['BOOKED','CONFIRMED'].includes(a.status)).length,
   }
+
+  // Walk-in queue position counter
+  let walkInCount = 0
 
   return (
     <div className="max-w-5xl mx-auto p-6">
@@ -80,19 +123,13 @@ export default function ReceptionistPage() {
         </Link>
       </div>
 
-      {/* Date picker */}
       <div className="flex items-center gap-3 mb-6">
         <label className="text-sm font-medium text-gray-600">Date</label>
-        <input
-          type="date"
-          value={date}
-          onChange={e => setDate(e.target.value)}
-          className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-        />
+        <input type="date" value={date} onChange={e => setDate(e.target.value)}
+          className="border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
         <button onClick={load} className="text-sm text-green-700 hover:underline">Refresh</button>
       </div>
 
-      {/* Stats row */}
       <div className="grid grid-cols-4 gap-3 mb-6">
         {[
           { label: 'Total', value: stats.total, color: 'bg-gray-50' },
@@ -107,55 +144,76 @@ export default function ReceptionistPage() {
         ))}
       </div>
 
-      {loading ? (
-        <p className="text-gray-500">Loading…</p>
-      ) : appointments.length === 0 ? (
+      {loading ? <p className="text-gray-500">Loading…</p> : appointments.length === 0 ? (
         <p className="text-gray-500">No appointments for this date.</p>
       ) : (
         <div className="space-y-3">
-          {appointments.map(apt => {
+          {appointments.map((apt, idx) => {
             const statusCfg = STATUS_CONFIG[apt.status] ?? { label: apt.status, color: 'bg-gray-100 text-gray-600' }
             const nextStatuses = NEXT_STATUS[apt.status] ?? []
+            if (apt.is_walk_in) walkInCount++
+            const walkInPosition = apt.is_walk_in ? walkInCount : 0
 
             return (
               <div key={apt.id} className="bg-white border rounded p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <p className="font-semibold text-gray-800">
                         {apt.patient?.first_name} {apt.patient?.last_name}
                       </p>
                       {apt.is_walk_in && (
-                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Walk-in</span>
+                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Walk-in #{walkInPosition}</span>
                       )}
                       <span className={`text-xs px-2 py-0.5 rounded-full ${statusCfg.color}`}>{statusCfg.label}</span>
                     </div>
                     <p className="text-sm text-gray-500">
-                      {apt.start_time?.slice(0, 5)} – {apt.end_time?.slice(0, 5)} &nbsp;·&nbsp;
-                      Dr. {apt.doctor?.first_name} {apt.doctor?.last_name}
+                      {apt.start_time?.slice(0, 5)} – {apt.end_time?.slice(0, 5)} · Dr. {apt.doctor?.first_name} {apt.doctor?.last_name}
                     </p>
-                    {apt.patient?.mobile && (
-                      <p className="text-xs text-gray-400 mt-0.5">{apt.patient.mobile}</p>
-                    )}
+                    <p className="text-xs text-gray-400 mt-0.5">{apt.patient?.mobile}</p>
                   </div>
 
-                  <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-                    {nextStatuses.map(s => (
-                      <button
-                        key={s}
-                        onClick={() => updateStatus(apt.id, s)}
-                        disabled={updating === apt.id}
-                        className="text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        {STATUS_CONFIG[s]?.label ?? s}
-                      </button>
-                    ))}
-                    {apt.status === 'COMPLETED' && (
-                      <Link href={`/receptionist/prescription/${apt.id}`}>
-                        <button className="text-xs bg-green-700 text-white rounded px-2 py-1 hover:bg-green-800">
-                          + Prescription
+                  <div className="flex flex-col items-end gap-1.5 ml-4">
+                    {/* Status action buttons */}
+                    <div className="flex gap-1.5 flex-wrap justify-end">
+                      {nextStatuses.map(s => (
+                        <button key={s} onClick={() => updateStatus(apt.id, s)}
+                          disabled={updating === apt.id}
+                          className="text-xs border border-gray-300 rounded px-2 py-1 hover:bg-gray-50 disabled:opacity-50">
+                          {STATUS_CONFIG[s]?.label ?? s}
                         </button>
-                      </Link>
+                      ))}
+                      {apt.status === 'COMPLETED' && (
+                        <Link href={`/receptionist/prescription/${apt.id}`}>
+                          <button className="text-xs bg-green-700 text-white rounded px-2 py-1 hover:bg-green-800">
+                            + Prescription
+                          </button>
+                        </Link>
+                      )}
+                    </div>
+
+                    {/* WhatsApp buttons */}
+                    {apt.patient?.mobile && (
+                      <div className="flex gap-1.5 flex-wrap justify-end">
+                        {['BOOKED','CONFIRMED'].includes(apt.status) && (
+                          <button onClick={() => sendConfirmationWA(apt)}
+                            className="text-xs bg-[#25D366] text-white rounded px-2 py-1 hover:bg-[#1ea352]">
+                            💬 Confirm
+                          </button>
+                        )}
+                        {['BOOKED','CONFIRMED','ARRIVED'].includes(apt.status) && (
+                          <button onClick={() => sendReminderWA(apt)}
+                            className="text-xs border border-[#25D366] text-[#1ea352] rounded px-2 py-1 hover:bg-green-50">
+                            💬 Reminder
+                          </button>
+                        )}
+                        {apt.is_walk_in && apt.status === 'BOOKED' && (
+                          <button onClick={() => sendWalkInTokenWA(apt, walkInPosition)}
+                            className="text-xs border border-purple-300 text-purple-700 rounded px-2 py-1 hover:bg-purple-50">
+                            💬 Token
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
