@@ -8,37 +8,45 @@ import { useFocusEffect, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from './lib/supabase'
 import { resolveAndOpenSupportWA } from './lib/whatsapp'
+import * as ImagePicker from 'expo-image-picker'
+import * as DocumentPicker from 'expo-document-picker'
+
+const WEB_API = 'https://rasbros.com'
 
 // ── Types ─────────────────────────────────────────────────────
 interface DoctorProfile {
   id: string; first_name: string; last_name: string
   ayush_specialization: string; verification_status: string
 }
-
 interface Appointment {
-  id: string
-  appointment_date: string
-  start_time: string
-  end_time: string
-  status: string
-  type: string
+  id: string; appointment_date: string; start_time: string
+  end_time: string; status: string; type: string
   patient: { id: string; first_name: string; last_name: string; mobile: string } | null
 }
-
 interface ConsultationForm {
   chief_complaint: string; diagnosis: string; notes: string; next_visit_date: string
+}
+interface TestResultRow {
+  id: string; file_name: string; file_type: string; notes: string | null
+}
+interface PatientFamilyRow {
+  id: string; relation_type: string; first_name: string | null; last_name: string | null
+  known_conditions: string[]; allergies: string[]; notes: string | null
+}
+const RELATION_LABEL: Record<string, string> = {
+  FATHER:'Father', MOTHER:'Mother', SPOUSE:'Spouse', SIBLING:'Sibling',
+  CHILD:'Child', GRANDPARENT:'Grandparent', OTHER:'Other',
 }
 
 const SPEC: Record<string, string> = {
   AYU: 'Ayurveda', YOG: 'Yoga & Naturopathy', UNA: 'Unani', SID: 'Siddha', HOM: 'Homeopathy',
 }
-
 const STATUS_COLOR: Record<string, string> = {
-  BOOKED: '#3B82F6', CONFIRMED: '#6366F1', ARRIVED: '#F59E0B',
-  IN_PROGRESS: '#F97316', COMPLETED: '#16A34A', NO_SHOW: '#EF4444', CANCELLED: '#9CA3AF',
+  BOOKED: '#2980b9', CONFIRMED: '#6366F1', ARRIVED: '#F59E0B',
+  IN_PROGRESS: '#F97316', COMPLETED: '#27ae60', CANCELLED: '#e74c3c',
 }
 
-// ── Consultation Entry Modal ───────────────────────────────────
+// ── Consultation + Attachment Modal ───────────────────────────
 function ConsultationModal({
   appointment, doctorId, onClose, onSaved,
 }: {
@@ -47,13 +55,35 @@ function ConsultationModal({
   onClose: () => void
   onSaved: () => void
 }) {
+  const [step, setStep] = useState<'form' | 'attachments'>('form')
+  const [savedConsultId, setSavedConsultId] = useState<string | null>(null)
+  const [savedPatientId, setSavedPatientId] = useState<string | null>(null)
   const [form, setForm] = useState<ConsultationForm>({
     chief_complaint: '', diagnosis: '', notes: '', next_visit_date: '',
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  function set(field: keyof ConsultationForm, val: string) {
+  // Family history state
+  const [familyMembers, setFamilyMembers] = useState<PatientFamilyRow[] | null>(null)
+  const [familyExpanded, setFamilyExpanded] = useState(false)
+
+  async function loadFamilyHistory(patientId: string) {
+    if (familyMembers !== null) return // already loaded
+    const { data } = await supabase
+      .from('patient_family')
+      .select('id, relation_type, first_name, last_name, known_conditions, allergies, notes')
+      .eq('patient_id', patientId)
+      .order('relation_type')
+    setFamilyMembers((data ?? []) as PatientFamilyRow[])
+  }
+
+  // Attachment state
+  const [attachments, setAttachments] = useState<TestResultRow[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [attachNote, setAttachNote] = useState('')
+
+  function setField(field: keyof ConsultationForm, val: string) {
     setForm(p => ({ ...p, [field]: val }))
   }
 
@@ -62,11 +92,10 @@ function ConsultationModal({
     if (!appointment) return
     setSaving(true); setError('')
     try {
-      // Resolve patient_id from appointment
       const patientId = appointment.patient?.id
       if (!patientId) throw new Error('Patient record not found on this appointment')
 
-      const { error: insertErr } = await supabase.from('consultation').insert({
+      const { data, error: insertErr } = await supabase.from('consultation').insert({
         appointment_id: appointment.id,
         patient_id: patientId,
         doctor_id: doctorId,
@@ -74,13 +103,73 @@ function ConsultationModal({
         diagnosis: form.diagnosis.trim() || null,
         notes: form.notes.trim() || null,
         next_visit_date: form.next_visit_date.trim() || null,
-      })
+      }).select('id').single()
       if (insertErr) throw insertErr
-      Alert.alert('Saved ✓', 'Consultation notes recorded.', [{ text: 'OK', onPress: () => { onSaved(); onClose() } }])
+      setSavedConsultId(data.id)
+      setSavedPatientId(patientId)
+      onSaved()
+      setStep('attachments')
     } catch (e: any) {
       setError(e.message ?? 'Failed to save.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function uploadFile(uri: string, name: string, mimeType: string) {
+    if (!savedConsultId || !savedPatientId || !appointment) return
+    setUploading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Not authenticated')
+
+      const formData = new FormData()
+      formData.append('file', { uri, name, type: mimeType } as any)
+      formData.append('appointment_id', appointment.id)
+      formData.append('patient_id', savedPatientId)
+      formData.append('uploaded_by_role', 'DOCTOR')
+      if (attachNote.trim()) formData.append('notes', attachNote.trim())
+
+      const res = await fetch(`${WEB_API}/api/test-results/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: formData,
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Upload failed')
+      setAttachments(prev => [...prev, json.test_result])
+      setAttachNote('')
+    } catch (e: any) {
+      Alert.alert('Upload Failed', e.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function pickImage() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) { Alert.alert('Permission needed', 'Allow photo access to attach images.'); return }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+      allowsMultipleSelection: false,
+    })
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0]
+      const name = asset.fileName ?? `image_${Date.now()}.jpg`
+      const mime = asset.mimeType ?? 'image/jpeg'
+      await uploadFile(asset.uri, name, mime)
+    }
+  }
+
+  async function pickDocument() {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf', 'image/*'],
+      copyToCacheDirectory: true,
+    })
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0]
+      await uploadFile(asset.uri, asset.name, asset.mimeType ?? 'application/pdf')
     }
   }
 
@@ -94,37 +183,88 @@ function ConsultationModal({
             <Ionicons name="close" size={22} color="#6B7280" />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={cm.title}>Consultation Notes</Text>
+            <Text style={cm.title}>
+              {step === 'form' ? 'Consultation Notes' : 'Attach Test Results'}
+            </Text>
             <Text style={cm.sub}>
               {appointment.patient?.first_name} {appointment.patient?.last_name} · {appointment.start_time?.slice(0, 5)}
             </Text>
           </View>
+          {step === 'attachments' && (
+            <View style={cm.savedBadge}>
+              <Text style={cm.savedBadgeText}>✓ Saved</Text>
+            </View>
+          )}
         </View>
 
         <ScrollView style={cm.body} keyboardShouldPersistTaps="handled">
-          {error ? <View style={cm.errorBox}><Text style={cm.errorText}>{error}</Text></View> : null}
-
-          <Text style={cm.label}>Chief Complaint *</Text>
-          <TextInput style={cm.input} value={form.chief_complaint} onChangeText={v => set('chief_complaint', v)}
-            placeholder="e.g. Chronic back pain, digestive issues…" placeholderTextColor="#bbb"
-            multiline numberOfLines={3} textAlignVertical="top" />
-
-          <Text style={cm.label}>Diagnosis</Text>
-          <TextInput style={cm.input} value={form.diagnosis} onChangeText={v => set('diagnosis', v)}
-            placeholder="Diagnosis (optional)" placeholderTextColor="#bbb" />
-
-          <Text style={cm.label}>Clinical Notes</Text>
-          <TextInput style={[cm.input, { minHeight: 80 }]} value={form.notes} onChangeText={v => set('notes', v)}
-            placeholder="Observations, treatment plan, lifestyle advice…" placeholderTextColor="#bbb"
-            multiline numberOfLines={4} textAlignVertical="top" />
-
-          <Text style={cm.label}>Next Visit Date</Text>
-          <TextInput style={cm.input} value={form.next_visit_date} onChangeText={v => set('next_visit_date', v)}
-            placeholder="YYYY-MM-DD (optional)" placeholderTextColor="#bbb" />
-
-          <TouchableOpacity style={[cm.saveBtn, saving && cm.saveBtnDisabled]} onPress={save} disabled={saving}>
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={cm.saveBtnText}>Save Consultation Notes ✓</Text>}
-          </TouchableOpacity>
+          {step === 'form' ? (
+            <>
+              {error ? <View style={cm.errorBox}><Text style={cm.errorText}>{error}</Text></View> : null}
+              <Text style={cm.label}>Chief Complaint *</Text>
+              <TextInput style={cm.input} value={form.chief_complaint} onChangeText={v => setField('chief_complaint', v)}
+                placeholder="e.g. Chronic back pain, digestive issues…" placeholderTextColor="#bbb"
+                multiline numberOfLines={3} textAlignVertical="top" />
+              <Text style={cm.label}>Diagnosis</Text>
+              <TextInput style={cm.input} value={form.diagnosis} onChangeText={v => setField('diagnosis', v)}
+                placeholder="Diagnosis (optional)" placeholderTextColor="#bbb" />
+              <Text style={cm.label}>Clinical Notes</Text>
+              <TextInput style={[cm.input, { minHeight: 80 }]} value={form.notes} onChangeText={v => setField('notes', v)}
+                placeholder="Observations, treatment plan, lifestyle advice…" placeholderTextColor="#bbb"
+                multiline numberOfLines={4} textAlignVertical="top" />
+              <Text style={cm.label}>Next Visit Date</Text>
+              <TextInput style={cm.input} value={form.next_visit_date} onChangeText={v => setField('next_visit_date', v)}
+                placeholder="YYYY-MM-DD (optional)" placeholderTextColor="#bbb" />
+              <TouchableOpacity style={[cm.saveBtn, saving && cm.saveBtnDisabled]} onPress={save} disabled={saving}>
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={cm.saveBtnText}>Save &amp; Attach Results →</Text>}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View style={cm.attachInfo}>
+                <Text style={cm.attachInfoText}>
+                  Consultation saved ✓{'\n'}Optionally attach lab reports, X-rays, or scans.
+                </Text>
+              </View>
+              <Text style={cm.label}>Note for attachment (optional)</Text>
+              <TextInput style={cm.input} value={attachNote} onChangeText={setAttachNote}
+                placeholder="e.g. CBC report, Chest X-ray" placeholderTextColor="#bbb" />
+              <View style={cm.attachButtons}>
+                <TouchableOpacity style={cm.attachBtn} onPress={pickImage} disabled={uploading}>
+                  <Ionicons name="image-outline" size={20} color="#166534" />
+                  <Text style={cm.attachBtnText}>Photo / Scan</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={cm.attachBtn} onPress={pickDocument} disabled={uploading}>
+                  <Ionicons name="document-outline" size={20} color="#166534" />
+                  <Text style={cm.attachBtnText}>PDF / File</Text>
+                </TouchableOpacity>
+              </View>
+              {uploading && (
+                <View style={cm.uploadingRow}>
+                  <ActivityIndicator size="small" color="#166534" />
+                  <Text style={cm.uploadingText}>Uploading…</Text>
+                </View>
+              )}
+              {attachments.length > 0 && (
+                <View style={cm.attachList}>
+                  <Text style={cm.attachListTitle}>Attached ({attachments.length})</Text>
+                  {attachments.map(a => (
+                    <View key={a.id} style={cm.attachItem}>
+                      <Ionicons
+                        name={a.file_type === 'application/pdf' ? 'document-text' : 'image'}
+                        size={16} color="#6B7280"
+                      />
+                      <Text style={cm.attachItemText} numberOfLines={1}>{a.file_name}</Text>
+                      {a.notes ? <Text style={cm.attachItemNote}>{a.notes}</Text> : null}
+                    </View>
+                  ))}
+                </View>
+              )}
+              <TouchableOpacity style={cm.doneBtn} onPress={onClose}>
+                <Text style={cm.doneBtnText}>Done</Text>
+              </TouchableOpacity>
+            </>
+          )}
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -155,12 +295,9 @@ export default function DoctorDashboardScreen() {
       .single()
     if (!doc) { setLoading(false); return }
     setDoctor(doc as DoctorProfile)
-
     if (doc.verification_status !== 'APPROVED') { setLoading(false); return }
 
     const today = new Date().toISOString().split('T')[0]
-
-    // Today's appointments with patient info
     const { data: apts } = await supabase
       .from('appointment')
       .select('id, appointment_date, start_time, end_time, status, type, patient:patient_id(id, first_name, last_name, mobile)')
@@ -174,47 +311,34 @@ export default function DoctorDashboardScreen() {
       patient: Array.isArray(a.patient) ? a.patient[0] ?? null : a.patient,
     })) as Appointment[])
 
-    // Upcoming count (after today)
     const { count: upcoming } = await supabase
-      .from('appointment')
-      .select('id', { count: 'exact', head: true })
-      .eq('doctor_id', doc.id)
-      .gt('appointment_date', today)
+      .from('appointment').select('id', { count: 'exact', head: true })
+      .eq('doctor_id', doc.id).gt('appointment_date', today)
       .not('status', 'in', '("CANCELLED","NO_SHOW")')
     setUpcomingCount(upcoming ?? 0)
 
-    // Distinct patients ever seen
     const { count: patients } = await supabase
-      .from('appointment')
-      .select('patient_id', { count: 'exact', head: true })
-      .eq('doctor_id', doc.id)
-      .eq('status', 'COMPLETED')
+      .from('appointment').select('patient_id', { count: 'exact', head: true })
+      .eq('doctor_id', doc.id).eq('status', 'COMPLETED')
     setTotalPatients(patients ?? 0)
 
-    // Prescriptions pending doctor sign-off
-    const { count: pending } = await supabase
-      .from('prescription')
-      .select('id', { count: 'exact', head: true })
-      .eq('verified_by_doctor', false)
-      .in('appointment_id',
-        (apts ?? []).map(a => a.id).length > 0
-          ? (apts ?? []).map(a => a.id)
-          : ['00000000-0000-0000-0000-000000000000'])
-    setPendingRx(pending ?? 0)
+    const aptIds = (apts ?? []).map(a => a.id)
+    if (aptIds.length > 0) {
+      const { count: pending } = await supabase
+        .from('prescription').select('id', { count: 'exact', head: true })
+        .eq('verified_by_doctor', false).in('appointment_id', aptIds)
+      setPendingRx(pending ?? 0)
+    }
 
     setLoading(false); setRefreshing(false)
   }
 
   useFocusEffect(useCallback(() => { load() }, []))
   function onRefresh() { setRefreshing(true); load() }
-
-  async function signOut() {
-    await supabase.auth.signOut()
-  }
+  async function signOut() { await supabase.auth.signOut() }
 
   if (loading) return <ActivityIndicator style={{ flex: 1 }} color="#16A34A" />
 
-  // Pending approval state
   if (doctor && doctor.verification_status !== 'APPROVED') {
     return (
       <View style={s.center}>
@@ -228,7 +352,7 @@ export default function DoctorDashboardScreen() {
     )
   }
 
-  const activeApts  = todayApts.filter(a => ['BOOKED','CONFIRMED','ARRIVED','IN_PROGRESS'].includes(a.status))
+  const activeApts    = todayApts.filter(a => ['BOOKED','CONFIRMED','ARRIVED','IN_PROGRESS'].includes(a.status))
   const completedApts = todayApts.filter(a => a.status === 'COMPLETED')
 
   return (
@@ -237,7 +361,6 @@ export default function DoctorDashboardScreen() {
         style={s.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16A34A" />}
       >
-        {/* Header */}
         <View style={s.header}>
           <View style={{ flex: 1 }}>
             <Text style={s.greeting}>Good {greeting()}</Text>
@@ -254,13 +377,12 @@ export default function DoctorDashboardScreen() {
           </View>
         </View>
 
-        {/* Stats */}
         <View style={s.statsRow}>
           {[
-            { label: "Today's Patients", value: todayApts.length, color: '#EFF6FF', border: '#BFDBFE', text: '#1E40AF' },
-            { label: 'Active Now',       value: activeApts.length, color: '#FFF7ED', border: '#FED7AA', text: '#92400E' },
-            { label: 'Completed Today',  value: completedApts.length, color: '#ECFDF5', border: '#A7F3D0', text: '#065F46' },
-            { label: 'Upcoming',         value: upcomingCount, color: '#F5F3FF', border: '#DDD6FE', text: '#5B21B6' },
+            { label: "Today's Patients", value: todayApts.length,      color: '#EFF6FF', border: '#BFDBFE', text: '#1E40AF' },
+            { label: 'Active Now',       value: activeApts.length,     color: '#FFF7ED', border: '#FED7AA', text: '#92400E' },
+            { label: 'Completed Today',  value: completedApts.length,  color: '#ECFDF5', border: '#A7F3D0', text: '#065F46' },
+            { label: 'Upcoming',         value: upcomingCount,          color: '#F5F3FF', border: '#DDD6FE', text: '#5B21B6' },
           ].map(stat => (
             <View key={stat.label} style={[s.statCard, { backgroundColor: stat.color, borderColor: stat.border }]}>
               <Text style={[s.statNum, { color: stat.text }]}>{stat.value}</Text>
@@ -278,7 +400,6 @@ export default function DoctorDashboardScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Today's Queue */}
         <View style={s.section}>
           <Text style={s.sectionTitle}>Today's Queue</Text>
           <Text style={s.sectionDate}>
@@ -305,14 +426,9 @@ export default function DoctorDashboardScreen() {
                 </Text>
               </View>
             </View>
-
-            {/* Actions */}
             <View style={s.aptActions}>
               {['ARRIVED', 'IN_PROGRESS', 'COMPLETED'].includes(apt.status) && (
-                <TouchableOpacity
-                  style={s.consultBtn}
-                  onPress={() => setConsultApt(apt)}
-                >
+                <TouchableOpacity style={s.consultBtn} onPress={() => setConsultApt(apt)}>
                   <Ionicons name="document-text-outline" size={14} color="#fff" />
                   <Text style={s.consultBtnText}>
                     {apt.status === 'COMPLETED' ? 'Add Notes' : 'Start Consultation'}
@@ -320,13 +436,10 @@ export default function DoctorDashboardScreen() {
                 </TouchableOpacity>
               )}
               {apt.patient?.mobile && (
-                <TouchableOpacity
-                  style={s.waAptBtn}
-                  onPress={() => {
-                    const { Linking } = require('react-native')
-                    Linking.openURL(`https://wa.me/${apt.patient!.mobile.replace(/\D/g, '')}`)
-                  }}
-                >
+                <TouchableOpacity style={s.waAptBtn} onPress={() => {
+                  const { Linking } = require('react-native')
+                  Linking.openURL(`https://wa.me/${apt.patient!.mobile.replace(/\D/g, '')}`)
+                }}>
                   <Text style={s.waAptBtnText}>💬</Text>
                 </TouchableOpacity>
               )}
@@ -334,29 +447,21 @@ export default function DoctorDashboardScreen() {
           </View>
         ))}
 
-        {/* Quick Nav */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Quick Actions</Text>
-        </View>
+        <View style={s.section}><Text style={s.sectionTitle}>Quick Actions</Text></View>
         <View style={s.quickActions}>
           <TouchableOpacity style={s.quickBtn} onPress={() => router.push('/doctor-availability')}>
-            <Text style={s.quickIcon}>🗓️</Text>
-            <Text style={s.quickLabel}>Availability</Text>
+            <Text style={s.quickIcon}>🗓️</Text><Text style={s.quickLabel}>Availability</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.quickBtn} onPress={() => router.push('/consultation')}>
-            <Text style={s.quickIcon}>🩺</Text>
-            <Text style={s.quickLabel}>Consultations</Text>
+            <Text style={s.quickIcon}>🩺</Text><Text style={s.quickLabel}>Consultations</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.quickBtn} onPress={() => resolveAndOpenSupportWA()}>
-            <Text style={s.quickIcon}>💬</Text>
-            <Text style={s.quickLabel}>Support</Text>
+            <Text style={s.quickIcon}>💬</Text><Text style={s.quickLabel}>Support</Text>
           </TouchableOpacity>
         </View>
-
         <View style={{ height: 48 }} />
       </ScrollView>
 
-      {/* Consultation Modal */}
       {consultApt && doctor && (
         <ConsultationModal
           appointment={consultApt}
@@ -376,7 +481,6 @@ function greeting() {
   return 'evening'
 }
 
-// ── Styles ────────────────────────────────────────────────────
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: '#F9FAFB' },
@@ -385,10 +489,7 @@ const s = StyleSheet.create({
   pendingText: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   signOutBtn: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, paddingHorizontal: 20, paddingVertical: 10 },
   signOutText: { color: '#EF4444', fontWeight: '600' },
-  header: {
-    backgroundColor: '#166534', paddingTop: 56, paddingBottom: 20,
-    paddingHorizontal: 20, flexDirection: 'row', alignItems: 'flex-start',
-  },
+  header: { backgroundColor: '#166534', paddingTop: 56, paddingBottom: 20, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'flex-start' },
   greeting: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
   doctorName: { color: '#fff', fontSize: 22, fontWeight: '700', marginTop: 2 },
   spec: { color: '#A7F3D0', fontSize: 13, marginTop: 2 },
@@ -396,10 +497,7 @@ const s = StyleSheet.create({
   headerBtn: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 8, padding: 8 },
   headerBtnIcon: { fontSize: 18 },
   statsRow: { flexDirection: 'row', flexWrap: 'wrap', padding: 12, gap: 10 },
-  statCard: {
-    width: '47%', borderRadius: 12, padding: 14,
-    borderWidth: 1, alignItems: 'center',
-  },
+  statCard: { width: '47%', borderRadius: 12, padding: 14, borderWidth: 1, alignItems: 'center' },
   statNum: { fontSize: 28, fontWeight: '800' },
   statLabel: { fontSize: 11, fontWeight: '600', marginTop: 2, textAlign: 'center' },
   rxBanner: { backgroundColor: '#FEF3C7', marginHorizontal: 16, marginBottom: 8, borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#FDE68A' },
@@ -435,6 +533,8 @@ const cm = StyleSheet.create({
   closeBtn: { padding: 4 },
   title: { fontSize: 17, fontWeight: '700', color: '#111827' },
   sub: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  savedBadge: { backgroundColor: '#DCFCE7', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
+  savedBadgeText: { color: '#166534', fontSize: 12, fontWeight: '600' },
   body: { flex: 1, padding: 20, backgroundColor: '#F9FAFB' },
   label: { fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 6, marginTop: 16 },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 12, fontSize: 15, color: '#111827' },
@@ -443,4 +543,30 @@ const cm = StyleSheet.create({
   saveBtn: { backgroundColor: '#166534', borderRadius: 10, padding: 15, alignItems: 'center', marginTop: 24 },
   saveBtnDisabled: { opacity: 0.5 },
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  attachInfo: { backgroundColor: '#DCFCE7', borderRadius: 8, padding: 14, marginBottom: 4 },
+  attachInfoText: { color: '#166534', fontSize: 13, lineHeight: 20 },
+  attachButtons: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  attachBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: '#166534', borderRadius: 10, paddingVertical: 14, backgroundColor: '#fff' },
+  attachBtnText: { color: '#166534', fontWeight: '600', fontSize: 14 },
+  uploadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
+  uploadingText: { color: '#6B7280', fontSize: 13 },
+  attachList: { marginTop: 16, backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', padding: 12 },
+  attachListTitle: { fontSize: 13, fontWeight: '700', color: '#374151', marginBottom: 8 },
+  attachItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
+  attachItemText: { flex: 1, fontSize: 13, color: '#374151' },
+  attachItemNote: { fontSize: 11, color: '#9CA3AF' },
+  doneBtn: { backgroundColor: '#166534', borderRadius: 10, padding: 15, alignItems: 'center', marginTop: 24 },
+  doneBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  familyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F3F4F6', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, marginTop: 16 },
+  familyHeaderText: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  familyBody: { backgroundColor: '#F9FAFB', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#E5E7EB', marginTop: 4, gap: 8 },
+  familyEmpty: { fontSize: 13, color: '#9CA3AF', textAlign: 'center', paddingVertical: 8 },
+  familyRow: { paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  familyRelation: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 4 },
+  conditionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 3 },
+  condBadge: { backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 7, paddingVertical: 2 },
+  condBadgeText: { fontSize: 11, color: '#DC2626' },
+  allergyBadge: { backgroundColor: '#FEF9C3', borderRadius: 12, paddingHorizontal: 7, paddingVertical: 2 },
+  allergyBadgeText: { fontSize: 11, color: '#854D0E' },
+  familyNotes: { fontSize: 11, color: '#6B7280', marginTop: 2, fontStyle: 'italic' },
 })

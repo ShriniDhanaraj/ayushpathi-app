@@ -12,7 +12,12 @@ type Appointment = {
   appointment_date: string
   start_time: string
   status: string
-  doctor: { first_name: string; last_name: string; ayush_specialization: string } | null
+  doctor: { id: string; first_name: string; last_name: string; ayush_specialization: string } | null
+}
+
+type NextVisit = {
+  next_visit_date: string
+  doctor: { id: string; first_name: string; last_name: string } | null
 }
 
 const SPEC: Record<string, string> = {
@@ -24,10 +29,17 @@ const STATUS_COLOR: Record<string, string> = {
   IN_PROGRESS: '#F97316', COMPLETED: '#27ae60', CANCELLED: '#e74c3c',
 }
 
+function daysFromToday(dateStr: string): number {
+  const today = new Date(); today.setHours(0,0,0,0)
+  const d = new Date(dateStr); d.setHours(0,0,0,0)
+  return Math.round((d.getTime() - today.getTime()) / 86400000)
+}
+
 export default function HomeScreen() {
   const router = useRouter()
   const [userName, setUserName] = useState('')
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [nextVisit, setNextVisit] = useState<NextVisit | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -36,36 +48,70 @@ export default function HomeScreen() {
     if (!user) return
 
     setUserName(user.user_metadata?.first_name ?? user.email?.split('@')[0] ?? 'Patient')
+    const today = new Date().toISOString().split('T')[0]
 
-    const { data } = await supabase
+    // Upcoming appointments
+    const { data: apts } = await supabase
       .from('appointment')
-      .select('id, appointment_date, start_time, status, doctor:doctor_id(first_name, last_name, ayush_specialization)')
+      .select('id, appointment_date, start_time, status, doctor:doctor_id(id, first_name, last_name, ayush_specialization)')
       .eq('patient_auth_id', user.id)
       .not('status', 'in', '("CANCELLED","NO_SHOW")')
-      .gte('appointment_date', new Date().toISOString().split('T')[0])
+      .gte('appointment_date', today)
       .order('appointment_date', { ascending: true })
       .order('start_time', { ascending: true })
       .limit(5)
+    setAppointments((apts as unknown as Appointment[]) ?? [])
 
-    setAppointments((data as unknown as Appointment[]) ?? [])
+    // Nearest next_visit_date from consultations
+    const { data: patient } = await supabase
+      .from('patient').select('id').eq('auth_user_id', user.id).maybeSingle()
+    if (patient) {
+      const { data: consults } = await supabase
+        .from('consultation')
+        .select('next_visit_date, doctor:doctor_id(id, first_name, last_name)')
+        .eq('patient_id', patient.id)
+        .not('next_visit_date', 'is', null)
+        .order('next_visit_date', { ascending: true })
+        .limit(10)
+
+      if (consults) {
+        // Find the most relevant: overdue first, then soonest upcoming
+        const all = (consults as unknown as NextVisit[]).filter(c => c.next_visit_date)
+        const overdue = all.filter(c => c.next_visit_date < today)
+        const upcoming = all.filter(c => c.next_visit_date >= today)
+        setNextVisit(overdue[0] ?? upcoming[0] ?? null)
+      }
+    }
+
     setLoading(false)
   }
 
   useFocusEffect(useCallback(() => { load() }, []))
 
   async function onRefresh() {
-    setRefreshing(true)
-    await load()
-    setRefreshing(false)
+    setRefreshing(true); await load(); setRefreshing(false)
   }
 
-  async function handleSignOut() {
-    await supabase.auth.signOut()
-  }
+  async function handleSignOut() { await supabase.auth.signOut() }
 
-  const upcoming = appointments.filter(a => !['COMPLETED'].includes(a.status))
-  const todayStr = new Date().toISOString().split('T')[0]
+  const upcoming  = appointments.filter(a => a.status !== 'COMPLETED')
+  const todayStr  = new Date().toISOString().split('T')[0]
   const todayApts = appointments.filter(a => a.appointment_date === todayStr)
+
+  // Next visit card colour
+  const nvDays = nextVisit ? daysFromToday(nextVisit.next_visit_date) : null
+  const nvColor = nvDays === null ? '#166534'
+    : nvDays < 0  ? '#DC2626'     // overdue — red
+    : nvDays <= 7 ? '#D97706'     // within 7 days — orange
+    : '#166534'                   // fine — green
+
+  function handleBookAgain(doctorId?: string) {
+    if (doctorId) {
+      router.push(`/(tabs)/appointments?doctor_id=${doctorId}`)
+    } else {
+      router.push('/(tabs)/appointments')
+    }
+  }
 
   return (
     <ScrollView
@@ -83,6 +129,37 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* ── Next Visit Due Card ──────────────────────────────── */}
+      {nextVisit && (
+        <View style={[styles.nextVisitCard, { borderColor: nvColor }]}>
+          <View style={styles.nextVisitLeft}>
+            <Text style={[styles.nextVisitLabel, { color: nvColor }]}>
+              {nvDays !== null && nvDays < 0
+                ? `⚠️ Visit overdue by ${Math.abs(nvDays)} day${Math.abs(nvDays) !== 1 ? 's' : ''}`
+                : nvDays === 0
+                ? '🏥 Next visit is TODAY'
+                : `📅 Next visit in ${nvDays} day${nvDays !== 1 ? 's' : ''}`}
+            </Text>
+            <Text style={styles.nextVisitDate}>
+              {new Date(nextVisit.next_visit_date).toLocaleDateString('en-IN', {
+                weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+              })}
+            </Text>
+            {nextVisit.doctor && (
+              <Text style={styles.nextVisitDoctor}>
+                Dr. {(nextVisit.doctor as any).first_name} {(nextVisit.doctor as any).last_name}
+              </Text>
+            )}
+          </View>
+          <TouchableOpacity
+            style={[styles.bookAgainBtn, { backgroundColor: nvColor }]}
+            onPress={() => handleBookAgain((nextVisit.doctor as any)?.id)}
+          >
+            <Text style={styles.bookAgainBtnText}>Book Now</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Stats */}
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
@@ -99,7 +176,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Today's appointments highlight */}
+      {/* Today's appointments */}
       {todayApts.length > 0 && (
         <>
           <Text style={styles.sectionTitle}>Today</Text>
@@ -136,24 +213,19 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        upcoming
-          .filter(a => a.appointment_date > todayStr)
-          .map(apt => (
-            <View key={apt.id} style={styles.aptCard}>
-              <View style={styles.aptHeader}>
-                <Text style={styles.aptDoctor}>
-                  Dr. {apt.doctor?.first_name} {apt.doctor?.last_name}
-                </Text>
-                <View style={[styles.statusBadge, { backgroundColor: STATUS_COLOR[apt.status] ?? '#999' }]}>
-                  <Text style={styles.statusText}>{apt.status.replace('_', ' ')}</Text>
-                </View>
+        upcoming.filter(a => a.appointment_date > todayStr).map(apt => (
+          <View key={apt.id} style={styles.aptCard}>
+            <View style={styles.aptHeader}>
+              <Text style={styles.aptDoctor}>Dr. {apt.doctor?.first_name} {apt.doctor?.last_name}</Text>
+              <View style={[styles.statusBadge, { backgroundColor: STATUS_COLOR[apt.status] ?? '#999' }]}>
+                <Text style={styles.statusText}>{apt.status.replace('_', ' ')}</Text>
               </View>
-              <Text style={styles.aptSpec}>{SPEC[apt.doctor?.ayush_specialization ?? ''] ?? apt.doctor?.ayush_specialization}</Text>
-              <Text style={styles.aptDate}>{apt.appointment_date} at {apt.start_time?.slice(0, 5)}</Text>
             </View>
-          ))
+            <Text style={styles.aptSpec}>{SPEC[apt.doctor?.ayush_specialization ?? ''] ?? apt.doctor?.ayush_specialization}</Text>
+            <Text style={styles.aptDate}>{apt.appointment_date} at {apt.start_time?.slice(0, 5)}</Text>
+          </View>
+        ))
       )}
-
       <View style={{ height: 40 }} />
     </ScrollView>
   )
@@ -168,6 +240,22 @@ const styles = StyleSheet.create({
   greeting: { color: '#a8d5b5', fontSize: 13 },
   userName: { color: '#fff', fontSize: 20, fontWeight: '700', marginTop: 2 },
   signOutBtn: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 8, padding: 8 },
+
+  // Next Visit Card
+  nextVisitCard: {
+    marginHorizontal: 16, marginTop: 16, marginBottom: 4,
+    backgroundColor: '#fff', borderRadius: 14, borderWidth: 2,
+    padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12,
+    shadowColor: '#000', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 2 }, shadowRadius: 6,
+    elevation: 2,
+  },
+  nextVisitLeft: { flex: 1 },
+  nextVisitLabel: { fontSize: 14, fontWeight: '700' },
+  nextVisitDate: { fontSize: 13, color: '#374151', marginTop: 2 },
+  nextVisitDoctor: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  bookAgainBtn: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  bookAgainBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+
   statsRow: { flexDirection: 'row', padding: 16, gap: 12 },
   statCard: {
     flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 16,
@@ -175,7 +263,10 @@ const styles = StyleSheet.create({
   },
   statNum: { fontSize: 24, fontWeight: '700', color: '#1a6b3a' },
   statLabel: { fontSize: 11, color: '#888', marginTop: 2 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: '#555', paddingHorizontal: 16, marginBottom: 10, marginTop: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionTitle: {
+    fontSize: 14, fontWeight: '700', color: '#555', paddingHorizontal: 16,
+    marginBottom: 10, marginTop: 8, textTransform: 'uppercase', letterSpacing: 0.5,
+  },
   aptCard: {
     backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 12,
     borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#d0e8da',

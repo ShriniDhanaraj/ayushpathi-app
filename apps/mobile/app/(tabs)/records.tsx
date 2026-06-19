@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native'
-import { useFocusEffect } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 
@@ -15,6 +15,28 @@ const WEB_API = 'https://rasbros.com'
 interface Medication  { name: string; dosage: string; frequency: string; since: string }
 interface Surgery     { procedure: string; year: string; hospital: string }
 interface FamilyItem  { relation: string; condition: string }
+interface FamilyMember {
+  id: string
+  relation_type: string
+  first_name: string | null
+  last_name: string | null
+  date_of_birth: string | null
+  known_conditions: string[]
+  allergies: string[]
+  notes: string | null
+  related_patient_id: string | null
+}
+
+const RELATION_LABEL: Record<string, string> = {
+  FATHER:'Father', MOTHER:'Mother', SPOUSE:'Spouse', SIBLING:'Sibling',
+  CHILD:'Child', GRANDPARENT:'Grandparent', OTHER:'Other',
+}
+const RELATION_EMOJI: Record<string, string> = {
+  FATHER:'👨', MOTHER:'👩', SPOUSE:'💑', SIBLING:'🧑',
+  CHILD:'👶', GRANDPARENT:'👴', OTHER:'🧑‍🤝‍🧑',
+}
+
+
 interface HealthProfile {
   known_conditions: string[]; allergies: string[]
   current_medications: Medication[]; past_surgeries: Surgery[]; family_history: FamilyItem[]
@@ -56,6 +78,11 @@ export default function RecordsScreen() {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<keyof HealthProfile | null>('known_conditions')
   const [expandedConsult, setExpandedConsult] = useState<string | null>(null)
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([])
+  const [familyTab, setFamilyTab] = useState<'view'|'add'>('view')
+  const [newMember, setNewMember] = useState({ relation_type:'', first_name:'', last_name:'', known_conditions:'', allergies:'', notes:'' })
+  const [savingFamily, setSavingFamily] = useState(false)
+  const router = useRouter()
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -84,6 +111,14 @@ export default function RecordsScreen() {
         .eq('patient_id', patient.id)
         .order('created_at', { ascending: false })
       setConsultations((consultData ?? []) as unknown as Consultation[])
+
+      // Load structured family members
+      const { data: familyData } = await supabase
+        .from('patient_family')
+        .select('id, relation_type, first_name, last_name, date_of_birth, known_conditions, allergies, notes, related_patient_id')
+        .eq('patient_id', patient.id)
+        .order('relation_type')
+      setFamilyMembers((familyData ?? []) as FamilyMember[])
     }
     setLoading(false)
   }
@@ -135,6 +170,11 @@ export default function RecordsScreen() {
             Consultations {consultations.length > 0 ? `(${consultations.length})` : ''}
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity style={[styles.tabBtn, tab === 'family' && styles.tabBtnActive]} onPress={() => setTab('family' as any)}>
+          <Text style={[styles.tabText, tab === 'family' && styles.tabTextActive]}>
+            Family {familyMembers.length > 0 ? `(${familyMembers.length})` : ''}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {tab === 'health' ? (
@@ -173,6 +213,118 @@ export default function RecordsScreen() {
           </Section>
           <View style={{ height: 48 }} />
         </ScrollView>
+      ) : tab === 'family' ? (
+        <ScrollView style={styles.body}>
+          <View style={{ padding: 16 }}>
+            <Text style={{ fontSize: 13, color: '#555', marginBottom: 12, lineHeight: 18 }}>
+              Family history is critical in AYUSH — hereditary conditions inform Ayurveda &amp; Siddha diagnosis.
+            </Text>
+            {familyMembers.length === 0 && familyTab === 'view' && (
+              <View style={styles.emptyBox}>
+                <Text style={styles.emptyIcon}>👨‍👩‍👧</Text>
+                <Text style={styles.emptyTitle}>No family members added</Text>
+                <Text style={styles.emptySub}>Add parents, siblings or children to help your doctor understand hereditary patterns.</Text>
+              </View>
+            )}
+            {familyMembers.map(m => (
+              <View key={m.id} style={{ backgroundColor:'#fff', borderRadius:12, borderWidth:1, borderColor:'#d0e8da', padding:14, marginBottom:10 }}>
+                <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:6 }}>
+                  <Text style={{ fontSize:22 }}>{RELATION_EMOJI[m.relation_type] ?? '🧑'}</Text>
+                  <View style={{ flex:1 }}>
+                    <Text style={{ fontSize:14, fontWeight:'700', color:'#1a6b3a' }}>
+                      {RELATION_LABEL[m.relation_type] ?? m.relation_type}
+                      {m.first_name ? ` — ${m.first_name} ${m.last_name ?? ''}` : ''}
+                    </Text>
+                    {m.date_of_birth && <Text style={{ fontSize:12, color:'#888' }}>DOB: {m.date_of_birth}</Text>}
+                    {m.related_patient_id && <Text style={{ fontSize:11, color:'#166534' }}>✓ Registered patient</Text>}
+                  </View>
+                </View>
+                {m.known_conditions?.length > 0 && (
+                  <View style={{ flexDirection:'row', flexWrap:'wrap', gap:5, marginBottom:4 }}>
+                    {m.known_conditions.map(c => (
+                      <View key={c} style={{ backgroundColor:'#fee2e2', borderRadius:20, paddingHorizontal:8, paddingVertical:3 }}>
+                        <Text style={{ fontSize:11, color:'#DC2626' }}>{c}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {m.allergies?.length > 0 && (
+                  <View style={{ flexDirection:'row', flexWrap:'wrap', gap:5 }}>
+                    {m.allergies.map(a => (
+                      <View key={a} style={{ backgroundColor:'#fef9c3', borderRadius:20, paddingHorizontal:8, paddingVertical:3 }}>
+                        <Text style={{ fontSize:11, color:'#854d0e' }}>⚠ {a}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {m.notes && <Text style={{ fontSize:12, color:'#666', marginTop:4 }}>{m.notes}</Text>}
+              </View>
+            ))}
+            {familyTab === 'add' ? (
+              <View style={{ backgroundColor:'#fff', borderRadius:12, borderWidth:1, borderColor:'#d0e8da', padding:14, marginTop:8 }}>
+                <Text style={{ fontSize:14, fontWeight:'700', color:'#1a6b3a', marginBottom:10 }}>Add Family Member</Text>
+                {(['FATHER','MOTHER','SPOUSE','SIBLING','CHILD','GRANDPARENT','OTHER'] as const).map(r => (
+                  <TouchableOpacity key={r} onPress={() => setNewMember(p => ({ ...p, relation_type: r }))}
+                    style={{ flexDirection:'row', alignItems:'center', gap:8, paddingVertical:7, borderBottomWidth:1, borderBottomColor:'#f0f7f4' }}>
+                    <View style={{ width:20, height:20, borderRadius:10, borderWidth:2, borderColor:'#1a6b3a', alignItems:'center', justifyContent:'center' }}>
+                      {newMember.relation_type === r && <View style={{ width:10, height:10, borderRadius:5, backgroundColor:'#1a6b3a' }} />}
+                    </View>
+                    <Text style={{ fontSize:14, color: newMember.relation_type === r ? '#1a6b3a' : '#374151', fontWeight: newMember.relation_type === r ? '600' : '400' }}>
+                      {RELATION_EMOJI[r]} {RELATION_LABEL[r]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+                <TextInput style={[styles.input, { marginTop:10 }]} placeholder="First name" placeholderTextColor="#bbb"
+                  value={newMember.first_name} onChangeText={v => setNewMember(p => ({ ...p, first_name: v }))} />
+                <TextInput style={styles.input} placeholder="Last name" placeholderTextColor="#bbb"
+                  value={newMember.last_name} onChangeText={v => setNewMember(p => ({ ...p, last_name: v }))} />
+                <TextInput style={styles.input} placeholder="Known conditions (comma separated)" placeholderTextColor="#bbb"
+                  value={newMember.known_conditions} onChangeText={v => setNewMember(p => ({ ...p, known_conditions: v }))} />
+                <TextInput style={styles.input} placeholder="Allergies (comma separated)" placeholderTextColor="#bbb"
+                  value={newMember.allergies} onChangeText={v => setNewMember(p => ({ ...p, allergies: v }))} />
+                <TextInput style={[styles.input, { minHeight:60 }]} placeholder="Notes" placeholderTextColor="#bbb"
+                  multiline value={newMember.notes} onChangeText={v => setNewMember(p => ({ ...p, notes: v }))} />
+                <View style={{ flexDirection:'row', gap:8, marginTop:8 }}>
+                  <TouchableOpacity style={styles.cancelFormBtn} onPress={() => setFamilyTab('view')}>
+                    <Text style={styles.cancelFormText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity disabled={savingFamily || !newMember.relation_type}
+                    style={[styles.saveFormBtn, (!newMember.relation_type || savingFamily) && { opacity:0.5 }]}
+                    onPress={async () => {
+                      if (!newMember.relation_type || !patientId) return
+                      setSavingFamily(true)
+                      const conditions = newMember.known_conditions.split(',').map(s=>s.trim()).filter(Boolean)
+                      const allergies  = newMember.allergies.split(',').map(s=>s.trim()).filter(Boolean)
+                      const { data, error } = await supabase.from('patient_family').insert({
+                        patient_id: patientId,
+                        relation_type: newMember.relation_type,
+                        first_name: newMember.first_name || null,
+                        last_name: newMember.last_name || null,
+                        known_conditions: conditions,
+                        allergies,
+                        notes: newMember.notes || null,
+                        created_by: authUserId,
+                        updated_by: authUserId,
+                      }).select().single()
+                      setSavingFamily(false)
+                      if (error) { Alert.alert('Error', error.message); return }
+                      setFamilyMembers(prev => [...prev, data as FamilyMember])
+                      setNewMember({ relation_type:'', first_name:'', last_name:'', known_conditions:'', allergies:'', notes:'' })
+                      setFamilyTab('view')
+                    }}>
+                    <Text style={styles.saveFormText}>{savingFamily ? 'Saving…' : 'Save'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity style={[styles.addMoreBtn, { marginTop: 8 }]} onPress={() => setFamilyTab('add')}>
+                <Ionicons name="add-circle-outline" size={16} color="#1a6b3a" />
+                <Text style={styles.addMoreText}>Add family member</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={{ height:48 }} />
+        </ScrollView>
       ) : (
         <ScrollView style={styles.body}>
           {consultations.length === 0 ? (
@@ -201,7 +353,26 @@ export default function RecordsScreen() {
                       {c.chief_complaint ? <InfoRow label="Chief complaint" value={c.chief_complaint} /> : null}
                       {c.diagnosis       ? <InfoRow label="Diagnosis"       value={c.diagnosis}       /> : null}
                       {c.notes           ? <InfoRow label="Notes"           value={c.notes}           /> : null}
-                      {c.next_visit_date ? <InfoRow label="Next visit"      value={c.next_visit_date} /> : null}
+                      {c.next_visit_date && (() => {
+                        const nvDays = Math.round((new Date(c.next_visit_date).getTime() - new Date().setHours(0,0,0,0)) / 86400000)
+                        const nvColor = nvDays < 0 ? '#DC2626' : nvDays <= 7 ? '#D97706' : '#166534'
+                        return (
+                          <View style={{ marginBottom: 8 }}>
+                            <Text style={styles.infoLabel}>Next visit</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                              <Text style={[styles.infoValue, { color: nvColor, fontWeight: '600' }]}>
+                                {nvDays < 0 ? `⚠️ Overdue ${Math.abs(nvDays)}d` : nvDays === 0 ? '🏥 Today' : `📅 ${c.next_visit_date}`}
+                              </Text>
+                              <TouchableOpacity
+                                style={{ backgroundColor: nvColor, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}
+                                onPress={() => router.push('/(tabs)/appointments')}
+                              >
+                                <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>🔄 Book Again</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )
+                      })()}
                       {pres && pres.medicines?.length > 0 && (
                         <View style={styles.prescBox}>
                           <Text style={styles.prescTitle}>💊 Prescription</Text>

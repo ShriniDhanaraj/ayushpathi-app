@@ -46,6 +46,18 @@ export default async function ConsultationPage({ params }: { params: { appointme
     ? await supabase.from('consultation').select('*, prescription(*)').eq('patient_id', appt.patient_id).order('created_at', { ascending: false }).limit(5).then(r => r.data)
     : null
 
+  // Load family history (always shown when consent active — critical for AYUSH diagnosis)
+  const { data: familyMembers } = await supabase
+    .from('patient_family')
+    .select('id, relation_type, first_name, last_name, known_conditions, allergies, notes')
+    .eq('patient_id', appt.patient_id)
+    .order('relation_type')
+
+  const RELATION_LABEL: Record<string, string> = {
+    FATHER:'Father', MOTHER:'Mother', SPOUSE:'Spouse', SIBLING:'Sibling',
+    CHILD:'Child', GRANDPARENT:'Grandparent', OTHER:'Other',
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
@@ -117,6 +129,43 @@ export default async function ConsultationPage({ params }: { params: { appointme
                   <p className="text-gray-700">{c.diagnosis ?? 'No diagnosis recorded'}</p>
                 </div>
               ))}
+            </div>
+          )}
+          {/* Family History Panel */}
+          {familyMembers && familyMembers.length > 0 && (
+            <div className="card p-4 text-sm">
+              <h3 className="font-semibold text-gray-900 mb-3">
+                👨‍👩‍👧 Family History
+                <span className="ml-1 text-xs font-normal text-gray-400">({familyMembers.length})</span>
+              </h3>
+              <div className="space-y-3">
+                {familyMembers.map((m: {
+                  id: string; relation_type: string; first_name: string | null; last_name: string | null
+                  known_conditions: string[]; allergies: string[]; notes: string | null
+                }) => (
+                  <div key={m.id} className="border-l-2 border-purple-200 pl-3">
+                    <p className="font-medium text-gray-800 text-xs">
+                      {RELATION_LABEL[m.relation_type] ?? m.relation_type}
+                      {m.first_name ? ` — ${m.first_name} ${m.last_name ?? ''}` : ''}
+                    </p>
+                    {m.known_conditions?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {m.known_conditions.map((c: string) => (
+                          <span key={c} className="px-1.5 py-0.5 bg-red-50 text-red-600 text-xs rounded-full">{c}</span>
+                        ))}
+                      </div>
+                    )}
+                    {m.allergies?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {m.allergies.map((a: string) => (
+                          <span key={a} className="px-1.5 py-0.5 bg-amber-50 text-amber-700 text-xs rounded-full">⚠ {a}</span>
+                        ))}
+                      </div>
+                    )}
+                    {m.notes && <p className="text-gray-400 text-xs mt-0.5">{m.notes}</p>}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

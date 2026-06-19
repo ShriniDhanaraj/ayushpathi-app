@@ -1,16 +1,15 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { openWhatsApp, buildPrescriptionReady } from '@/lib/whatsapp'
 
 interface Medicine { name: string; dosage: string; frequency: string; duration: string; notes: string }
-
 interface AppointmentInfo {
-  id: string
-  appointment_date: string
+  id: string; appointment_date: string
   patient: { id: string; first_name: string; last_name: string; mobile: string } | null
   doctor: { id: string; first_name: string; last_name: string } | null
 }
+interface TestResultRow { id: string; file_name: string; file_type: string; notes: string | null }
 
 const EMPTY_MED: Medicine = { name: '', dosage: '', frequency: '', duration: '', notes: '' }
 
@@ -26,6 +25,12 @@ export default function PrescriptionEntryPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [savedPrescription, setSavedPrescription] = useState<{ medicineCount: number } | null>(null)
+
+  // Test result attachment state
+  const [testResults, setTestResults] = useState<TestResultRow[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [attachNote, setAttachNote] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch(`/api/receptionist/appointments?date=`)
@@ -60,11 +65,35 @@ export default function PrescriptionEntryPage() {
         entry_method: 'RECEPTIONIST',
       }),
     })
-
     const json = await res.json()
     setSubmitting(false)
     if (!res.ok) { setError(json.error ?? 'Failed to save'); return }
     setSavedPrescription({ medicineCount: validMeds.length })
+  }
+
+  async function handleFileUpload(files: FileList | null) {
+    if (!files || !apt?.patient?.id) return
+    const allowed = ['image/jpeg','image/png','image/webp','application/pdf','image/heic','image/heif']
+    for (const file of Array.from(files)) {
+      if (!allowed.includes(file.type)) { alert(`${file.name}: unsupported type`); continue }
+      if (file.size > 52428800) { alert(`${file.name}: too large (max 50 MB)`); continue }
+      setUploading(true)
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('appointment_id', appointmentId)
+      fd.append('patient_id', apt.patient.id)
+      fd.append('uploaded_by_role', 'RECEPTIONIST')
+      if (attachNote.trim()) fd.append('notes', attachNote.trim())
+      const res = await fetch('/api/test-results/upload', { method: 'POST', body: fd })
+      const json = await res.json()
+      setUploading(false)
+      if (res.ok) {
+        setTestResults(prev => [...prev, json.test_result])
+        setAttachNote('')
+      } else {
+        alert('Upload failed: ' + (json.error ?? 'Unknown error'))
+      }
+    }
   }
 
   function sendPrescriptionWA() {
@@ -81,12 +110,57 @@ export default function PrescriptionEntryPage() {
 
   if (savedPrescription) {
     return (
-      <div className="max-w-lg mx-auto p-6 pt-16 text-center">
-        <div className="text-5xl mb-4">✅</div>
-        <h2 className="text-xl font-bold text-gray-800 mb-2">Prescription Saved</h2>
-        <p className="text-gray-500 mb-8">
-          {savedPrescription.medicineCount} medicine{savedPrescription.medicineCount !== 1 ? 's' : ''} saved for {apt?.patient?.first_name} {apt?.patient?.last_name}
-        </p>
+      <div className="max-w-lg mx-auto p-6 pt-12">
+        <div className="text-center mb-8">
+          <div className="text-5xl mb-4">✅</div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Prescription Saved</h2>
+          <p className="text-gray-500">
+            {savedPrescription.medicineCount} medicine{savedPrescription.medicineCount !== 1 ? 's' : ''} saved for{' '}
+            {apt?.patient?.first_name} {apt?.patient?.last_name}
+          </p>
+        </div>
+
+        {/* Test Result Attachment */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+          <h3 className="font-semibold text-amber-900 mb-1 text-sm">📎 Attach Test Results (optional)</h3>
+          <p className="text-xs text-amber-700 mb-3">Attach lab reports, X-rays, or scans to this visit.</p>
+          <div className="flex gap-2 mb-3">
+            <input
+              type="text"
+              value={attachNote}
+              onChange={e => setAttachNote(e.target.value)}
+              placeholder="e.g. CBC report, Chest X-ray…"
+              className="flex-1 border rounded px-3 py-1.5 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="bg-amber-700 text-white rounded px-4 py-1.5 text-sm hover:bg-amber-800 disabled:opacity-50 whitespace-nowrap"
+            >
+              {uploading ? 'Uploading…' : '+ Attach File'}
+            </button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".jpg,.jpeg,.png,.webp,.pdf,.heic"
+            multiple
+            className="hidden"
+            onChange={e => handleFileUpload(e.target.files)}
+          />
+          {testResults.length > 0 && (
+            <div className="space-y-1.5">
+              {testResults.map(r => (
+                <div key={r.id} className="flex items-center gap-2 bg-white rounded px-3 py-2 text-sm border">
+                  <span>{r.file_type === 'application/pdf' ? '📄' : '🖼️'}</span>
+                  <span className="flex-1 text-gray-700 truncate">{r.file_name}</span>
+                  {r.notes && <span className="text-xs text-gray-400">{r.notes}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="flex flex-col gap-3">
           {apt?.patient?.mobile && (
@@ -119,7 +193,7 @@ export default function PrescriptionEntryPage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-gray-50 border rounded p-4 space-y-3">
           <h2 className="font-semibold text-gray-700 text-sm">Consultation Details</h2>
-          {[['chief_complaint','Chief Complaint','e.g. Fever for 3 days'],['diagnosis','Diagnosis','e.g. Viral fever']].map(([key,label,ph]) => (
+          {([['chief_complaint','Chief Complaint','e.g. Fever for 3 days'],['diagnosis','Diagnosis','e.g. Viral fever']] as const).map(([key,label,ph]) => (
             <div key={key}>
               <label className="block text-xs text-gray-600 mb-1">{label}</label>
               <input value={(form as Record<string, string | boolean>)[key] as string}
@@ -128,7 +202,7 @@ export default function PrescriptionEntryPage() {
             </div>
           ))}
           <div>
-            <label className="block text-xs text-gray-600 mb-1">Doctor's Notes</label>
+            <label className="block text-xs text-gray-600 mb-1">Doctor&apos;s Notes</label>
             <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
               rows={2} className="w-full border rounded px-3 py-1.5 text-sm resize-none" />
           </div>
