@@ -6,6 +6,7 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from './lib/supabase'
+import { resolveAndOpenSupportWA } from './lib/whatsapp'
 
 interface DoctorProfile {
   id: string
@@ -178,6 +179,15 @@ export default function DoctorDashboardScreen() {
             </View>
             <Text style={styles.specialization}>{SPEC[doctor.specialization] ?? doctor.specialization}</Text>
           </View>
+          <TouchableOpacity
+            onPress={async () => {
+              const { data: { session } } = await supabase.auth.getSession()
+              if (session) resolveAndOpenSupportWA(session.access_token, 'Hi, I need help with my Ayushpathi account.')
+            }}
+            style={[styles.signOutBtn, { marginRight: 4 }]}
+          >
+            <Text style={{ fontSize: 20 }}>💬</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={handleSignOut} style={styles.signOutBtn}>
             <Ionicons name="log-out-outline" size={20} color="rgba(255,255,255,0.8)" />
           </TouchableOpacity>

@@ -1,11 +1,19 @@
 /**
  * Ayushpathi WhatsApp — Mobile (React Native)
  * Uses Linking.openURL with wa.me deep link.
- * No API key, no third-party service. Same method as DROPeZi project.
+ *
+ * WA number hierarchy (same as web):
+ *   Patient / Doctor / Receptionist → Hospital WhatsApp
+ *   Hospital Admin (in group)       → Group WhatsApp
+ *   Hospital Admin (standalone)     → Platform WhatsApp
+ *   Group / Global Admin            → Platform WhatsApp
+ *
+ * Patients NEVER see group or platform numbers.
  */
 import { Linking, Alert } from 'react-native'
 
-const AYUSHPATHI_WA = '919876543210'
+export const PLATFORM_WA = '919361287432'
+const API_BASE = 'https://rasbros.com'
 
 function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '')
@@ -14,34 +22,51 @@ function normalizePhone(phone: string): string {
   return digits.slice(-10)
 }
 
-export async function openWhatsApp(phone: string, message: string): Promise<void> {
-  const clean = normalizePhone(phone)
-  // Try WhatsApp app first, fall back to wa.me web
-  const waAppUrl = `whatsapp://send?phone=91${clean}&text=${encodeURIComponent(message)}`
-  const waWebUrl = `https://wa.me/91${clean}?text=${encodeURIComponent(message)}`
-
-  const canOpen = await Linking.canOpenURL(waAppUrl)
-  const url = canOpen ? waAppUrl : waWebUrl
-
+async function openWA(fullNumber: string, message: string): Promise<void> {
+  const digits = fullNumber.replace(/\D/g, '')
+  const waAppUrl = `whatsapp://send?phone=${digits}&text=${encodeURIComponent(message)}`
+  const waWebUrl = `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
   try {
-    await Linking.openURL(url)
+    const canOpen = await Linking.canOpenURL(waAppUrl)
+    await Linking.openURL(canOpen ? waAppUrl : waWebUrl)
   } catch {
     Alert.alert('WhatsApp not found', 'Please install WhatsApp to send this message.')
   }
 }
 
-export async function openAyushpathiWhatsApp(message = 'Hi Ayushpathi! I need help.'): Promise<void> {
-  await openWhatsApp(AYUSHPATHI_WA, message)
+/** Send a message to any phone number (e.g. patient notifications) */
+export async function openWhatsApp(phone: string, message: string): Promise<void> {
+  const clean = normalizePhone(phone)
+  await openWA(`91${clean}`, message)
 }
 
-// ─── Message Templates (shared with web, copy kept here for offline use) ──────
+/**
+ * Opens the correct support WhatsApp for the current user.
+ * Calls /api/support/whatsapp with the user's JWT to resolve the right number.
+ */
+export async function resolveAndOpenSupportWA(
+  accessToken: string,
+  message = 'Hi! I need help with Ayushpathi.'
+): Promise<void> {
+  try {
+    const res = await fetch(`${API_BASE}/api/support/whatsapp`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    const json = await res.json()
+    await openWA(json.whatsapp ?? PLATFORM_WA, message)
+  } catch {
+    await openWA(PLATFORM_WA, message)
+  }
+}
+
+// ─── Message Templates ────────────────────────────────────────────────────────
 
 export function buildAppointmentConfirmation(apt: {
   patientName: string; doctorName: string; specialization?: string
   hospitalName?: string; date: string; startTime: string
   type: string; appointmentId: string
 }): string {
-  const dateStr = new Date(apt.date).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const dateStr = new Date(apt.date).toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
   const time = apt.startTime.slice(0, 5)
   const mode = apt.type === 'TELECONSULT' ? '📱 Teleconsultation' : '🏥 In-Person Visit'
   return [
@@ -50,7 +75,7 @@ export function buildAppointmentConfirmation(apt: {
     `Your appointment has been booked successfully.`, ``,
     `👨‍⚕️ Doctor: Dr. ${apt.doctorName}${apt.specialization ? ` (${apt.specialization})` : ''}`,
     apt.hospitalName ? `🏥 Hospital: ${apt.hospitalName}` : '',
-    `📅 Date: ${dateStr}`, `⏰ Time: ${time}`, `${mode}`,
+    `📅 Date: ${dateStr}`, `⏰ Time: ${time}`, mode,
     `🔖 Booking ID: ${apt.appointmentId.slice(0, 8).toUpperCase()}`, ``,
     `📌 *Please carry a valid ID and arrive 10 minutes early.*`, ``,
     `— Ayushpathi Healthcare`,
@@ -61,7 +86,7 @@ export function buildPrescriptionReady(p: {
   patientName: string; doctorName: string; date: string
   medicineCount: number; nextVisitDate?: string
 }): string {
-  const dateStr = new Date(p.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+  const dateStr = new Date(p.date).toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' })
   return [
     `💊 *Prescription Saved — Ayushpathi*`, ``,
     `Hello ${p.patientName},`,
@@ -69,7 +94,7 @@ export function buildPrescriptionReady(p: {
     `👨‍⚕️ Prescribed by: Dr. ${p.doctorName}`,
     `📅 Date: ${dateStr}`,
     `💊 Medicines: ${p.medicineCount} item${p.medicineCount !== 1 ? 's' : ''}`,
-    p.nextVisitDate ? `🗓️ Next Visit: ${new Date(p.nextVisitDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}` : '',
+    p.nextVisitDate ? `🗓️ Next Visit: ${new Date(p.nextVisitDate).toLocaleDateString('en-IN', { day:'numeric', month:'long' })}` : '',
     ``, `📲 Log in to Ayushpathi to view your full prescription.`,
     `🌐 rasbros.com`, ``, `— Ayushpathi Healthcare`,
   ].filter(Boolean).join('\n')
