@@ -20,6 +20,38 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'appointment_id or patient_id required' }, { status: 400 })
   }
 
+  // Ownership / access check
+  // Patients: may only query their own records
+  // Doctors, receptionists, hospital admins: may query any
+  const { data: myPatient } = await supabaseAdmin
+    .from('patient').select('id').eq('auth_user_id', user.id).maybeSingle()
+
+  const isPatient = !!myPatient
+
+  if (isPatient) {
+    // Resolve the patient_id in scope
+    const targetPatientId = patientId ?? (
+      appointmentId
+        ? await supabaseAdmin
+            .from('appointment').select('patient_id').eq('id', appointmentId).maybeSingle()
+            .then(r => r.data?.patient_id ?? null)
+        : null
+    )
+    if (targetPatientId && targetPatientId !== myPatient!.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  } else {
+    // Verify user is staff (doctor, receptionist, or admin)
+    const [{ data: doc }, { data: rec }, { data: adm }] = await Promise.all([
+      supabaseAdmin.from('doctor').select('id').eq('auth_user_id', user.id).maybeSingle(),
+      supabaseAdmin.from('receptionist').select('id').eq('auth_user_id', user.id).eq('is_active', true).maybeSingle(),
+      supabaseAdmin.from('hospital_admin').select('id').eq('auth_user_id', user.id).eq('is_active', true).maybeSingle(),
+    ])
+    if (!doc && !rec && !adm) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
   let query = supabaseAdmin.from('test_result').select('*').order('created_at', { ascending: false })
   if (appointmentId) query = query.eq('appointment_id', appointmentId)
   if (patientId) query = query.eq('patient_id', patientId)

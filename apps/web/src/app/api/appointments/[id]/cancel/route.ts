@@ -8,7 +8,6 @@ const supabaseAnon = createClient(
 )
 
 // PATCH /api/appointments/[id]/cancel
-// Cancels an appointment. Patient can cancel their own; receptionist/admin can cancel any.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -25,29 +24,45 @@ export async function PATCH(
   const supabase = getSupabaseAdmin()
   const { id } = params
 
-  // Fetch appointment to verify ownership or role
-  const { data: apt } = await supabase
+  // FIX: was selecting non-existent 'patient_auth_id' — join patient to get auth_user_id
+  const { data: apt, error: aptErr } = await supabase
     .from('appointment')
-    .select('id, status, patient_auth_id, doctor_id')
+    .select('id, status, doctor_id, patient:patient_id(id, auth_user_id)')
     .eq('id', id)
     .maybeSingle()
 
-  if (!apt) return NextResponse.json({ error: 'Appointment not found' }, { status: 404 })
+  if (aptErr || !apt) return NextResponse.json({ error: 'Appointment not found' }, { status: 404 })
+
   if (['CANCELLED', 'COMPLETED', 'NO_SHOW'].includes(apt.status)) {
     return NextResponse.json({ error: `Cannot cancel a ${apt.status} appointment` }, { status: 409 })
   }
 
-  // Allow: patient (own), or any authenticated user with receptionist/admin role
-  // (role check via user_profile table)
-  const { data: profile } = await supabase
-    .from('user_profile')
-    .select('role')
+  // Check if user is the patient who owns this appointment
+  const patient = Array.isArray(apt.patient) ? apt.patient[0] : apt.patient
+  const isPatientOwner = patient?.auth_user_id === user.id
+
+  // Check if user is staff (receptionist or hospital admin)
+  const { data: rec } = await supabase
+    .from('receptionist')
+    .select('id')
+    .eq('auth_user_id', user.id)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  const { data: admin } = await supabase
+    .from('hospital_admin')
+    .select('id')
+    .eq('auth_user_id', user.id)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  const { data: doctor } = await supabase
+    .from('doctor')
+    .select('id')
     .eq('auth_user_id', user.id)
     .maybeSingle()
 
-  const role = profile?.role ?? ''
-  const isPatientOwner = apt.patient_auth_id === user.id
-  const isStaff = ['receptionist', 'hospital-admin', 'doctor-approved'].includes(role)
+  const isStaff = !!(rec || admin || doctor)
 
   if (!isPatientOwner && !isStaff) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -57,7 +72,6 @@ export async function PATCH(
     .from('appointment')
     .update({
       status: 'CANCELLED',
-      cancellation_reason,
       updated_at: new Date().toISOString(),
       updated_by: user.id,
     })
@@ -67,25 +81,25 @@ export async function PATCH(
 
   // Fire push notification to doctor
   try {
-    const { data: doctor } = await supabase
+    const { data: doctorData } = await supabase
       .from('doctor')
       .select('auth_user_id')
       .eq('id', apt.doctor_id)
       .maybeSingle()
 
-    if (doctor?.auth_user_id) {
-      const { data: token } = await supabase
+    if (doctorData?.auth_user_id) {
+      const { data: pushToken } = await supabase
         .from('device_push_token')
         .select('token')
-        .eq('auth_user_id', doctor.auth_user_id)
+        .eq('auth_user_id', doctorData.auth_user_id)
         .maybeSingle()
 
-      if (token?.token) {
+      if (pushToken?.token) {
         await fetch('https://exp.host/--/api/v2/push/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            to: token.token,
+            to: pushToken.token,
             title: 'Appointment Cancelled',
             body: `A patient cancelled their appointment (${cancellation_reason})`,
             data: { type: 'APPOINTMENT_CANCELLED', appointment_id: id },
