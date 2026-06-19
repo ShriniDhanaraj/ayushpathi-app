@@ -4,7 +4,7 @@ import { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { registerForPushNotifications, useNotificationListeners } from '../lib/push-notifications'
 
-type UserRole = 'patient' | 'doctor-approved' | 'doctor-pending' | 'receptionist' | 'unknown'
+type UserRole = 'patient' | 'doctor-approved' | 'doctor-pending' | 'receptionist' | 'hospital-admin' | 'unknown'
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null)
@@ -14,7 +14,16 @@ export default function RootLayout() {
   const segments = useSegments()
 
   async function detectRole(userId: string): Promise<UserRole> {
-    // Check receptionist table first
+    // Hospital admin (check before receptionist — admins outrank)
+    const { data: adminRow } = await supabase
+      .from('hospital_admin')
+      .select('id')
+      .eq('auth_user_id', userId)
+      .eq('is_active', true)
+      .maybeSingle()
+    if (adminRow) return 'hospital-admin'
+
+    // Receptionist
     const { data: recRow } = await supabase
       .from('receptionist')
       .select('id')
@@ -22,19 +31,17 @@ export default function RootLayout() {
       .maybeSingle()
     if (recRow) return 'receptionist'
 
-    // Check doctor table
+    // Doctor
     const { data: doctorRow } = await supabase
       .from('doctor')
       .select('verification_status')
       .eq('auth_user_id', userId)
       .maybeSingle()
     if (doctorRow) {
-      return doctorRow.verification_status === 'APPROVED'
-        ? 'doctor-approved'
-        : 'doctor-pending'
+      return doctorRow.verification_status === 'APPROVED' ? 'doctor-approved' : 'doctor-pending'
     }
 
-    // Check patient table
+    // Patient
     const { data: patientRow } = await supabase
       .from('patient')
       .select('id')
@@ -42,7 +49,7 @@ export default function RootLayout() {
       .maybeSingle()
     if (patientRow) return 'patient'
 
-    // Fallback: check user metadata
+    // Metadata fallback
     const meta = (await supabase.auth.getUser()).data.user?.user_metadata
     if (meta?.role === 'doctor') return 'doctor-pending'
     if (meta?.role === 'patient') return 'patient'
@@ -75,7 +82,6 @@ export default function RootLayout() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Listen for notification taps and route accordingly
   useEffect(() => {
     const cleanup = useNotificationListeners(
       undefined,
@@ -92,30 +98,36 @@ export default function RootLayout() {
   useEffect(() => {
     if (loading) return
 
-    const inAuthGroup        = segments[0] === '(auth)'
-    const inPending          = segments[0] === 'pending-approval'
-    const inDoctorDashboard  = segments[0] === 'doctor-dashboard'
-    const inTabs             = segments[0] === '(tabs)'
-    const inReceptionist     = segments[0] === '(receptionist)'
+    const seg0 = segments[0]
+    const inAuth         = seg0 === '(auth)'
+    const inPending      = seg0 === 'pending-approval'
+    const inDoctor       = seg0 === 'doctor-dashboard'
+    const inTabs         = seg0 === '(tabs)'
+    const inReceptionist = seg0 === '(receptionist)'
+    const inHospAdmin    = seg0 === '(hospital-admin)'
 
     if (!session) {
-      if (!inAuthGroup) router.replace('/(auth)/login')
+      if (!inAuth) router.replace('/(auth)/login')
       return
     }
 
     switch (role) {
+      case 'hospital-admin':
+        // Hospital admins use the web dashboard; mobile shows a minimal info screen
+        if (!inHospAdmin) router.replace('/(hospital-admin)/')
+        break
       case 'receptionist':
         if (!inReceptionist) router.replace('/(receptionist)/')
         break
       case 'doctor-approved':
-        if (!inDoctorDashboard) router.replace('/doctor-dashboard')
+        if (!inDoctor) router.replace('/doctor-dashboard')
         break
       case 'doctor-pending':
         if (!inPending) router.replace('/pending-approval')
         break
       case 'patient':
       case 'unknown':
-        if (inAuthGroup || inPending || inDoctorDashboard || inReceptionist) router.replace('/(tabs)/')
+        if (inAuth || inPending || inDoctor || inReceptionist || inHospAdmin) router.replace('/(tabs)/')
         break
     }
   }, [session, role, segments, loading])
@@ -125,6 +137,7 @@ export default function RootLayout() {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="(receptionist)" />
+      <Stack.Screen name="(hospital-admin)" />
       <Stack.Screen name="pending-approval" />
       <Stack.Screen name="doctor-dashboard" />
       <Stack.Screen name="doctor-availability" />
