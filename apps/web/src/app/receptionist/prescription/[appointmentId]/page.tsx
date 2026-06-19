@@ -122,7 +122,7 @@ export default function PrescriptionEntryPage() {
           {[['chief_complaint','Chief Complaint','e.g. Fever for 3 days'],['diagnosis','Diagnosis','e.g. Viral fever']].map(([key,label,ph]) => (
             <div key={key}>
               <label className="block text-xs text-gray-600 mb-1">{label}</label>
-              <input value={(form as Record<string,string>)[key]}
+              <input value={(form as Record<string, string | boolean>)[key] as string}
                 onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
                 placeholder={ph} className="w-full border rounded px-3 py-1.5 text-sm" />
             </div>
