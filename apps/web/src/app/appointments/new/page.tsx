@@ -77,14 +77,15 @@ export default function BookAppointmentPage() {
   }, [])
 
   async function searchDoctors() {
-    if (!spec) return
     setSearching(true)
     const supabase = getSupabaseClient()
-    const { data } = await supabase
+    let query = supabase
       .from('doctor')
       .select('id, first_name, last_name, ayush_specialization, years_of_experience, languages_spoken, teleconsult_enabled, teleconsult_fee, address:address_id(city, state)')
-      .eq('ayush_specialization', spec)
       .eq('verification_status', 'APPROVED')
+      .order('last_name')
+    if (spec) query = query.eq('ayush_specialization', spec)
+    const { data } = await query
     setDoctors((data ?? []) as unknown as Doctor[])
     setSearching(false)
     setStep(2)
@@ -165,6 +166,16 @@ export default function BookAppointmentPage() {
         {step === 1 && (
           <div className="card p-6 space-y-4">
             <h2 className="font-semibold text-gray-900">Choose AYUSH specialization</h2>
+            {/* All AYUSH — full width tile */}
+            <button onClick={() => setSpec('')}
+              className={`w-full p-4 rounded-xl border text-left transition-colors ${
+                spec === '' ? 'bg-brand-600 border-brand-600 text-white' : 'bg-white border-gray-200 hover:border-brand-400 text-gray-700'
+              }`}>
+              <p className="font-semibold">All AYUSH</p>
+              <p className={`text-xs mt-0.5 ${spec === '' ? 'text-brand-100' : 'text-gray-400'}`}>
+                Search across all 5 specializations
+              </p>
+            </button>
             <div className="grid grid-cols-2 gap-3">
               {SPECIALIZATIONS.map(s => (
                 <button key={s.code} onClick={() => setSpec(s.code)}
@@ -175,7 +186,7 @@ export default function BookAppointmentPage() {
                 </button>
               ))}
             </div>
-            <button onClick={searchDoctors} className="btn-primary w-full" disabled={!spec || searching}>
+            <button onClick={searchDoctors} className="btn-primary w-full" disabled={searching}>
               {searching ? 'Searching…' : 'Search Doctors →'}
             </button>
           </div>
@@ -184,9 +195,12 @@ export default function BookAppointmentPage() {
         {step === 2 && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900">{doctors.length} doctor{doctors.length !== 1 ? 's' : ''} found</h2>
+              <h2 className="font-semibold text-gray-900">
+                {doctors.length} doctor{doctors.length !== 1 ? 's' : ''} found
+                {spec ? ` · ${SPECIALIZATIONS.find(s => s.code === spec)?.label}` : ' · All AYUSH'}
+              </h2>
               <button onClick={() => { setStep(1); setSelectedDoctor(null); setSlots([]) }}
-                className="text-sm text-brand-600 hover:underline">Change specialization</button>
+                className="text-sm text-brand-600 hover:underline">Change</button>
             </div>
 
             {doctors.length === 0 && (
@@ -202,9 +216,10 @@ export default function BookAppointmentPage() {
                 <div className="flex justify-between items-start">
                   <div>
                     <p className="font-semibold text-gray-900">Dr. {doc.first_name} {doc.last_name}</p>
-                    <p className="text-sm text-gray-500 mt-0.5">
-                      {SPECIALIZATIONS.find(s => s.code === doc.ayush_specialization)?.label} · {doc.years_of_experience}yr exp
+                    <p className="text-sm text-brand-700 font-medium mt-0.5">
+                      {SPECIALIZATIONS.find(s => s.code === doc.ayush_specialization)?.label ?? doc.ayush_specialization}
                     </p>
+                    <p className="text-xs text-gray-500">{doc.years_of_experience}yr exp</p>
                     <p className="text-xs text-gray-400 mt-1">{(doc.languages_spoken ?? []).join(', ')}</p>
                   </div>
                   <div className="text-right">
