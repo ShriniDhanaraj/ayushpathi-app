@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { getSupabaseClient } from '@/lib/supabase'
 
 type Step = 1 | 2 | 3
@@ -53,6 +53,28 @@ export default function BookAppointmentPage() {
   const [type, setType] = useState<'F2F' | 'TELECONSULT'>('F2F')
   const [loading, setLoading] = useState(false)
   const [searching, setSearching] = useState(false)
+  const searchParams = useSearchParams()
+
+  // Pre-select a doctor when arriving from /doctor/[id] profile page
+  useEffect(() => {
+    const doctorId = searchParams.get('doctor')
+    if (!doctorId) return
+    const supabase = getSupabaseClient()
+    supabase
+      .from('doctor')
+      .select('id, first_name, last_name, ayush_specialization, years_of_experience, languages_spoken, teleconsult_enabled, teleconsult_fee, address:address_id(city, state)')
+      .eq('id', doctorId)
+      .eq('verification_status', 'APPROVED')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        const doc = data as unknown as Doctor
+        setSelectedDoctor(doc)
+        setSpec(doc.ayush_specialization)
+        setDoctors([doc])
+        setStep(2)
+      })
+  }, [])
 
   async function searchDoctors() {
     if (!spec) return
