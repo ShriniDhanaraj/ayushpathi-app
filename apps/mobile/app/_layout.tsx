@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { registerForPushNotifications, useNotificationListeners } from '../lib/push-notifications'
 
 type UserRole = 'patient' | 'doctor-approved' | 'doctor-pending' | 'unknown'
 
@@ -48,6 +49,8 @@ export default function RootLayout() {
       if (session) {
         const r = await detectRole(session.user.id)
         setRole(r)
+        // Register push token after login
+        registerForPushNotifications(session.user.id).catch(console.error)
       }
       setLoading(false)
     })
@@ -57,12 +60,30 @@ export default function RootLayout() {
       if (session) {
         const r = await detectRole(session.user.id)
         setRole(r)
+        registerForPushNotifications(session.user.id).catch(console.error)
       } else {
         setRole('unknown')
       }
     })
 
     return () => subscription.unsubscribe()
+  }, [])
+
+  // Listen for incoming push notifications and handle taps
+  useEffect(() => {
+    const cleanup = useNotificationListeners(
+      undefined, // foreground notifications handled automatically
+      (response) => {
+        // Route to relevant screen based on notification data
+        const data = response.notification.request.content.data as Record<string, string>
+        if (data?.type === 'appointment' && data?.appointment_id) {
+          router.push('/(tabs)/appointments')
+        } else if (data?.type === 'consultation' && data?.consultation_id) {
+          router.push('/consultation')
+        }
+      }
+    )
+    return cleanup
   }, [])
 
   useEffect(() => {
@@ -80,16 +101,13 @@ export default function RootLayout() {
 
     switch (role) {
       case 'doctor-approved':
-        // Approved doctors go to their own dashboard
         if (!inDoctorDashboard) router.replace('/doctor-dashboard')
         break
       case 'doctor-pending':
-        // Pending / rejected doctors wait on the approval screen
         if (!inPending) router.replace('/pending-approval')
         break
       case 'patient':
       case 'unknown':
-        // Patients (and freshly registered users) go to the patient tabs
         if (inAuthGroup || inPending || inDoctorDashboard) router.replace('/(tabs)/')
         break
     }
