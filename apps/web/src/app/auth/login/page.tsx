@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabaseClient } from '@/lib/supabase'
 import { ROLE_DASHBOARD } from '@/lib/auth'
+import { LANGUAGES } from '@ayushpathi/shared/constants/languages'
+import { getTranslations } from '@ayushpathi/shared/i18n/translations'
 
 const FRIENDLY_ERRORS: Record<string, string> = {
   'Invalid login credentials': 'Incorrect email or password. Please try again.',
@@ -18,38 +20,93 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  // UI language on the login page (pre-login, defaults to EN)
+  const [uiLang, setUiLang] = useState('EN')
+
+  const T = getTranslations(uiLang)
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
     const supabase = getSupabaseClient()
+
     const { data, error: authErr } = await supabase.auth.signInWithPassword({ email, password })
     if (authErr) {
       setError(FRIENDLY_ERRORS[authErr.message] ?? authErr.message)
       setLoading(false)
       return
     }
-    const role = data.user?.user_metadata?.role ?? 'patient'
+
+    const meta = data.user?.user_metadata ?? {}
+    const role = meta.role ?? 'patient'
+
+    // Derive ui_language from user metadata (set at registration) or profile
+    // The metadata stores ui_language directly for fast access without an extra DB fetch.
+    // If not present, fetch from patient/doctor table.
+    let derivedLang: string = meta.ui_language ?? 'EN'
+
+    if (!meta.ui_language && role === 'patient') {
+      const { data: profile } = await supabase
+        .from('patient')
+        .select('ui_language')
+        .eq('auth_user_id', data.user.id)
+        .single()
+      derivedLang = profile?.ui_language ?? 'EN'
+    } else if (!meta.ui_language && (role === 'doctor-approved' || role === 'doctor-pending' || role === 'doctor')) {
+      const { data: profile } = await supabase
+        .from('doctor')
+        .select('ui_language')
+        .eq('auth_user_id', data.user.id)
+        .single()
+      derivedLang = profile?.ui_language ?? 'EN'
+    }
+
+    // Store derived language in sessionStorage so the dashboard can read it immediately.
+    // The full i18n context picks this up on mount.
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('ayushpathi_ui_lang', derivedLang)
+    }
+
     router.push(ROLE_DASHBOARD[role as keyof typeof ROLE_DASHBOARD] ?? '/dashboard/patient')
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-50 to-white flex items-center justify-center p-4">
       <div className="w-full max-w-md">
+
+        {/* Language selector — top right, no auth required */}
+        <div className="flex justify-end mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">{T.changeLanguage}</span>
+            <select
+              value={uiLang}
+              onChange={e => setUiLang(e.target.value)}
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 focus:outline-none focus:border-brand-400"
+            >
+              {LANGUAGES.map(l => (
+                <option key={l.code} value={l.code}>
+                  {l.nativeLabel} ({l.label})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* App header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 bg-brand-600 rounded-2xl mb-4">
             <span className="text-white text-2xl font-bold">A</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Ayushpathi</h1>
-          <p className="text-gray-500 text-sm mt-1">Traditional Indian Medicine Platform</p>
+          <h1 className="text-2xl font-bold text-gray-900">{T.appName}</h1>
+          <p className="text-gray-500 text-sm mt-1">{T.appTagline}</p>
         </div>
 
         <div className="card p-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Sign in to your account</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">{T.signIn}</h2>
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="label">Email address</label>
+              <label className="label">{T.email}</label>
               <input
                 type="email"
                 className="input"
@@ -63,13 +120,13 @@ export default function LoginPage() {
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="label mb-0">Password</label>
+                <label className="label mb-0">{T.password}</label>
                 <button
                   type="button"
                   className="text-xs text-gray-400 hover:text-gray-600"
                   onClick={() => setShowPassword(p => !p)}
                 >
-                  {showPassword ? 'Hide' : 'Show'}
+                  {showPassword ? T.hidePassword : T.showPassword}
                 </button>
               </div>
               <input
@@ -102,16 +159,16 @@ export default function LoginPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
                   </svg>
-                  Signing in…
+                  {T.signingIn}
                 </span>
-              ) : 'Sign in'}
+              ) : T.signIn}
             </button>
           </form>
 
           <div className="mt-6 text-center text-sm text-gray-500">
-            New to Ayushpathi?{' '}
+            {T.noAccount}{' '}
             <Link href="/auth/register" className="text-brand-600 font-medium hover:underline">
-              Create account
+              {T.createAccount}
             </Link>
           </div>
         </div>

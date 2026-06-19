@@ -11,10 +11,20 @@ export async function POST(req: NextRequest) {
       degrees, ayush_specialization, years_of_experience,
       languages_spoken,
       degree_cert_url, registration_cert_url,
+      // Language preferences
+      ui_language,
     } = body
 
     if (!auth_user_id || !first_name || !email || !registration_number) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    if (!languages_spoken || !Array.isArray(languages_spoken) || languages_spoken.length === 0) {
+      return NextResponse.json({ error: 'At least one consultation language is required' }, { status: 400 })
+    }
+
+    if (!ui_language) {
+      return NextResponse.json({ error: 'App display language is required' }, { status: 400 })
     }
 
     const admin = getSupabaseAdmin()
@@ -25,7 +35,8 @@ export async function POST(req: NextRequest) {
       degrees: degrees ?? [],
       ayush_specialization,
       years_of_experience: parseInt(years_of_experience) || 0,
-      languages_spoken: languages_spoken ?? ['English'],
+      languages_spoken,
+      ui_language,
       degree_cert_url: degree_cert_url ?? null,
       registration_cert_url: registration_cert_url ?? null,
       auth_user_id,

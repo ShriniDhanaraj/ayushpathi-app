@@ -10,10 +10,27 @@ export async function POST(req: NextRequest) {
       email, mobile, whatsapp_enabled, communication_consent,
       door_number, street, area, city, district, state, pincode,
       guardian_name, guardian_mobile,
+      // Language preferences (all mandatory — validated below)
+      known_languages,
+      ui_language,
+      preferred_interaction_language,
     } = body
 
     if (!auth_user_id || !first_name || !email || !city || !state) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    // Language fields are mandatory
+    if (
+      !known_languages || !Array.isArray(known_languages) || known_languages.length === 0
+    ) {
+      return NextResponse.json({ error: 'At least one known language is required' }, { status: 400 })
+    }
+    if (!ui_language) {
+      return NextResponse.json({ error: 'App display language is required' }, { status: 400 })
+    }
+    if (!preferred_interaction_language) {
+      return NextResponse.json({ error: 'Preferred consultation language is required' }, { status: 400 })
     }
 
     const admin = getSupabaseAdmin()
@@ -40,6 +57,10 @@ export async function POST(req: NextRequest) {
       communication_consent: communication_consent ?? ['WHATSAPP'],
       address_id: addr.id,
       auth_user_id,
+      // Language preferences
+      known_languages,
+      ui_language,
+      preferred_interaction_language,
       ...(isMinor && guardian_name ? {
         guardian_name,
         guardian_mobile,
