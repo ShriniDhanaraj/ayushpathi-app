@@ -270,9 +270,12 @@ export default function DoctorDashboardScreen() {
         </View>
 
         {pendingRx > 0 && (
-          <View style={s.rxBanner}>
-            <Text style={s.rxBannerText}>⚠️ {pendingRx} prescription{pendingRx > 1 ? 's' : ''} pending your sign-off</Text>
-          </View>
+          <TouchableOpacity style={s.rxBanner} onPress={() => router.push('/prescription-signoff')}>
+            <View style={s.rxBannerRow}>
+              <Text style={s.rxBannerText}>⚠️ {pendingRx} prescription{pendingRx > 1 ? 's' : ''} pending your sign-off</Text>
+              <Text style={s.rxBannerCta}>Review →</Text>
+            </View>
+          </TouchableOpacity>
         )}
 
         {/* Today's Queue */}
@@ -400,7 +403,9 @@ const s = StyleSheet.create({
   statNum: { fontSize: 28, fontWeight: '800' },
   statLabel: { fontSize: 11, fontWeight: '600', marginTop: 2, textAlign: 'center' },
   rxBanner: { backgroundColor: '#FEF3C7', marginHorizontal: 16, marginBottom: 8, borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#FDE68A' },
-  rxBannerText: { fontSize: 13, color: '#92400E', fontWeight: '600' },
+  rxBannerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  rxBannerText: { fontSize: 13, color: '#92400E', fontWeight: '600', flex: 1 },
+  rxBannerCta: { fontSize: 13, color: '#92400E', fontWeight: '700', marginLeft: 8 },
   section: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 6 },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
   sectionDate: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },

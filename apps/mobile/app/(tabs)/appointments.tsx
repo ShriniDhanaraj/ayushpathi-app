@@ -132,6 +132,32 @@ export default function AppointmentsScreen() {
     setRefreshing(false)
   }
 
+  // ── cancel appointment ──
+  async function cancelAppointment(id: string) {
+    Alert.alert(
+      'Cancel Appointment',
+      'Are you sure you want to cancel this appointment?',
+      [
+        { text: 'Keep it', style: 'cancel' },
+        {
+          text: 'Cancel Appointment',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await supabase
+              .from('appointment')
+              .update({ status: 'CANCELLED', cancellation_reason: 'Patient cancelled', updated_at: new Date().toISOString() })
+              .eq('id', id)
+            if (error) {
+              Alert.alert('Error', 'Could not cancel appointment. Please try again.')
+            } else {
+              setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'CANCELLED' } : a))
+            }
+          },
+        },
+      ],
+    )
+  }
+
   // ── booking flow ──
   function resetBooking() {
     setStep('list')
@@ -260,7 +286,7 @@ export default function AppointmentsScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              upcoming.map(a => <AptCard key={a.id} apt={a} />)
+              upcoming.map(a => <AptCard key={a.id} apt={a} onCancel={cancelAppointment} />)
             )}
 
             {past.length > 0 && (
@@ -487,8 +513,11 @@ export default function AppointmentsScreen() {
 // ──────────────────────────────────────────────────────────────
 // Sub-components
 // ──────────────────────────────────────────────────────────────
-function AptCard({ apt }: { apt: Appointment }) {
+const CANCELLABLE = ['BOOKED', 'SCHEDULED', 'PENDING']
+
+function AptCard({ apt, onCancel }: { apt: Appointment; onCancel?: (id: string) => void }) {
   const color = STATUS_COLOR[apt.status] ?? '#999'
+  const canCancel = onCancel && CANCELLABLE.includes(apt.status)
   return (
     <View style={styles.aptCard}>
       <View style={styles.aptHeader}>
@@ -501,6 +530,11 @@ function AptCard({ apt }: { apt: Appointment }) {
       </View>
       <Text style={styles.aptSpec}>{specLabel(apt.doctor?.ayush_specialization ?? '')}</Text>
       <Text style={styles.aptDate}>{apt.appointment_date} · {apt.start_time}</Text>
+      {canCancel && (
+        <TouchableOpacity style={styles.cancelBtn} onPress={() => onCancel!(apt.id)}>
+          <Text style={styles.cancelBtnText}>Cancel Appointment</Text>
+        </TouchableOpacity>
+      )}
     </View>
   )
 }
@@ -557,6 +591,11 @@ const styles = StyleSheet.create({
   statusText: { color: '#fff', fontSize: 11, fontWeight: '600' },
   aptSpec: { fontSize: 13, color: '#555', marginBottom: 2 },
   aptDate: { fontSize: 12, color: '#888' },
+  cancelBtn: {
+    marginTop: 10, borderWidth: 1, borderColor: '#ef4444',
+    borderRadius: 8, paddingVertical: 8, alignItems: 'center' as const,
+  },
+  cancelBtnText: { color: '#ef4444', fontSize: 13, fontWeight: '600' as const },
   bookingHeader: {
     backgroundColor: '#1a6b3a', paddingTop: 56, paddingBottom: 20,
     paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12,
