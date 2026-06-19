@@ -1,27 +1,32 @@
 import { useState, useCallback } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, RefreshControl,
+  ActivityIndicator, RefreshControl, Modal, TextInput,
+  KeyboardAvoidingView, Platform, Alert,
 } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from './lib/supabase'
 import { resolveAndOpenSupportWA } from './lib/whatsapp'
 
+// ── Types ─────────────────────────────────────────────────────
 interface DoctorProfile {
-  id: string
-  first_name: string
-  last_name: string
-  specialization: string
-  verification_status: string
+  id: string; first_name: string; last_name: string
+  ayush_specialization: string; verification_status: string
 }
 
 interface Appointment {
   id: string
-  scheduled_at: string
+  appointment_date: string
+  start_time: string
+  end_time: string
   status: string
   type: string
-  patient: { first_name: string; last_name: string } | null
+  patient: { id: string; first_name: string; last_name: string; mobile: string } | null
+}
+
+interface ConsultationForm {
+  chief_complaint: string; diagnosis: string; notes: string; next_visit_date: string
 }
 
 const SPEC: Record<string, string> = {
@@ -29,17 +34,115 @@ const SPEC: Record<string, string> = {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  SCHEDULED: '#1a6b3a', CONFIRMED: '#2e86ab', COMPLETED: '#888', CANCELLED: '#e74c3c',
+  BOOKED: '#3B82F6', CONFIRMED: '#6366F1', ARRIVED: '#F59E0B',
+  IN_PROGRESS: '#F97316', COMPLETED: '#16A34A', NO_SHOW: '#EF4444', CANCELLED: '#9CA3AF',
 }
 
+// ── Consultation Entry Modal ───────────────────────────────────
+function ConsultationModal({
+  appointment, doctorId, onClose, onSaved,
+}: {
+  appointment: Appointment | null
+  doctorId: string
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [form, setForm] = useState<ConsultationForm>({
+    chief_complaint: '', diagnosis: '', notes: '', next_visit_date: '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  function set(field: keyof ConsultationForm, val: string) {
+    setForm(p => ({ ...p, [field]: val }))
+  }
+
+  async function save() {
+    if (!form.chief_complaint.trim()) { setError('Chief complaint is required.'); return }
+    if (!appointment) return
+    setSaving(true); setError('')
+    try {
+      // Resolve patient_id from appointment
+      const patientId = appointment.patient?.id
+      if (!patientId) throw new Error('Patient record not found on this appointment')
+
+      const { error: insertErr } = await supabase.from('consultation').insert({
+        appointment_id: appointment.id,
+        patient_id: patientId,
+        doctor_id: doctorId,
+        chief_complaint: form.chief_complaint.trim(),
+        diagnosis: form.diagnosis.trim() || null,
+        notes: form.notes.trim() || null,
+        next_visit_date: form.next_visit_date.trim() || null,
+      })
+      if (insertErr) throw insertErr
+      Alert.alert('Saved ✓', 'Consultation notes recorded.', [{ text: 'OK', onPress: () => { onSaved(); onClose() } }])
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to save.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!appointment) return null
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet">
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <View style={cm.header}>
+          <TouchableOpacity onPress={onClose} style={cm.closeBtn}>
+            <Ionicons name="close" size={22} color="#6B7280" />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={cm.title}>Consultation Notes</Text>
+            <Text style={cm.sub}>
+              {appointment.patient?.first_name} {appointment.patient?.last_name} · {appointment.start_time?.slice(0, 5)}
+            </Text>
+          </View>
+        </View>
+
+        <ScrollView style={cm.body} keyboardShouldPersistTaps="handled">
+          {error ? <View style={cm.errorBox}><Text style={cm.errorText}>{error}</Text></View> : null}
+
+          <Text style={cm.label}>Chief Complaint *</Text>
+          <TextInput style={cm.input} value={form.chief_complaint} onChangeText={v => set('chief_complaint', v)}
+            placeholder="e.g. Chronic back pain, digestive issues…" placeholderTextColor="#bbb"
+            multiline numberOfLines={3} textAlignVertical="top" />
+
+          <Text style={cm.label}>Diagnosis</Text>
+          <TextInput style={cm.input} value={form.diagnosis} onChangeText={v => set('diagnosis', v)}
+            placeholder="Diagnosis (optional)" placeholderTextColor="#bbb" />
+
+          <Text style={cm.label}>Clinical Notes</Text>
+          <TextInput style={[cm.input, { minHeight: 80 }]} value={form.notes} onChangeText={v => set('notes', v)}
+            placeholder="Observations, treatment plan, lifestyle advice…" placeholderTextColor="#bbb"
+            multiline numberOfLines={4} textAlignVertical="top" />
+
+          <Text style={cm.label}>Next Visit Date</Text>
+          <TextInput style={cm.input} value={form.next_visit_date} onChangeText={v => set('next_visit_date', v)}
+            placeholder="YYYY-MM-DD (optional)" placeholderTextColor="#bbb" />
+
+          <TouchableOpacity style={[cm.saveBtn, saving && cm.saveBtnDisabled]} onPress={save} disabled={saving}>
+            {saving ? <ActivityIndicator color="#fff" /> : <Text style={cm.saveBtnText}>Save Consultation Notes ✓</Text>}
+          </TouchableOpacity>
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
+  )
+}
+
+// ── Main Screen ───────────────────────────────────────────────
 export default function DoctorDashboardScreen() {
   const router = useRouter()
   const [doctor, setDoctor] = useState<DoctorProfile | null>(null)
   const [todayApts, setTodayApts] = useState<Appointment[]>([])
   const [upcomingCount, setUpcomingCount] = useState(0)
   const [totalPatients, setTotalPatients] = useState(0)
+  const [pendingRx, setPendingRx] = useState(0)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [consultApt, setConsultApt] = useState<Appointment | null>(null)
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -47,28 +150,24 @@ export default function DoctorDashboardScreen() {
 
     const { data: doc } = await supabase
       .from('doctor')
-      .select('id, first_name, last_name, specialization, verification_status')
+      .select('id, first_name, last_name, ayush_specialization, verification_status')
       .eq('auth_user_id', user.id)
       .single()
     if (!doc) { setLoading(false); return }
-    setDoctor(doc)
+    setDoctor(doc as DoctorProfile)
 
     if (doc.verification_status !== 'APPROVED') { setLoading(false); return }
 
-    // Today's date range
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-    const todayEnd = new Date()
-    todayEnd.setHours(23, 59, 59, 999)
+    const today = new Date().toISOString().split('T')[0]
 
+    // Today's appointments with patient info
     const { data: apts } = await supabase
       .from('appointment')
-      .select('id, scheduled_at, status, type, patient:patient_id(first_name, last_name)')
+      .select('id, appointment_date, start_time, end_time, status, type, patient:patient_id(id, first_name, last_name, mobile)')
       .eq('doctor_id', doc.id)
-      .gte('scheduled_at', todayStart.toISOString())
-      .lte('scheduled_at', todayEnd.toISOString())
-      .in('status', ['SCHEDULED', 'CONFIRMED'])
-      .order('scheduled_at', { ascending: true })
+      .eq('appointment_date', today)
+      .not('status', 'in', '("CANCELLED","NO_SHOW")')
+      .order('start_time', { ascending: true })
 
     setTodayApts((apts ?? []).map(a => ({
       ...a,
@@ -76,341 +175,267 @@ export default function DoctorDashboardScreen() {
     })) as Appointment[])
 
     // Upcoming count (after today)
-    const tomorrow = new Date(todayEnd)
-    tomorrow.setSeconds(tomorrow.getSeconds() + 1)
     const { count: upcoming } = await supabase
       .from('appointment')
       .select('id', { count: 'exact', head: true })
       .eq('doctor_id', doc.id)
-      .gte('scheduled_at', tomorrow.toISOString())
-      .in('status', ['SCHEDULED', 'CONFIRMED'])
-
+      .gt('appointment_date', today)
+      .not('status', 'in', '("CANCELLED","NO_SHOW")')
     setUpcomingCount(upcoming ?? 0)
 
-    // Active patients (consented)
-    const { count: pts } = await supabase
-      .from('patient_doctor_consent')
-      .select('id', { count: 'exact', head: true })
+    // Distinct patients ever seen
+    const { count: patients } = await supabase
+      .from('appointment')
+      .select('patient_id', { count: 'exact', head: true })
       .eq('doctor_id', doc.id)
-      .eq('status', 'ACTIVE')
+      .eq('status', 'COMPLETED')
+    setTotalPatients(patients ?? 0)
 
-    setTotalPatients(pts ?? 0)
-    setLoading(false)
+    // Prescriptions pending doctor sign-off
+    const { count: pending } = await supabase
+      .from('prescription')
+      .select('id', { count: 'exact', head: true })
+      .eq('verified_by_doctor', false)
+      .in('appointment_id',
+        (apts ?? []).map(a => a.id).length > 0
+          ? (apts ?? []).map(a => a.id)
+          : ['00000000-0000-0000-0000-000000000000'])
+    setPendingRx(pending ?? 0)
+
+    setLoading(false); setRefreshing(false)
   }
 
-  useFocusEffect(useCallback(() => {
-    setLoading(true)
-    load()
-  }, []))
+  useFocusEffect(useCallback(() => { load() }, []))
+  function onRefresh() { setRefreshing(true); load() }
 
-  async function onRefresh() {
-    setRefreshing(true)
-    await load()
-    setRefreshing(false)
-  }
-
-  async function handleSignOut() {
+  async function signOut() {
     await supabase.auth.signOut()
-    router.replace('/(auth)/login')
   }
 
-  if (loading) {
-    return <View style={styles.center}><ActivityIndicator color="#1a6b3a" size="large" /></View>
-  }
+  if (loading) return <ActivityIndicator style={{ flex: 1 }} color="#16A34A" />
 
-  if (!doctor) {
+  // Pending approval state
+  if (doctor && doctor.verification_status !== 'APPROVED') {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>Doctor profile not found.</Text>
-      </View>
-    )
-  }
-
-  // PENDING state
-  if (doctor.verification_status === 'PENDING') {
-    return (
-      <View style={styles.container}>
-        <PendingHeader doctor={doctor} onSignOut={handleSignOut} />
-        <View style={styles.center}>
-          <Ionicons name="time-outline" size={64} color="#f0c040" />
-          <Text style={styles.pendingTitle}>Application Under Review</Text>
-          <Text style={styles.pendingBody}>
-            Your profile is being verified by the Ayushpathi team. This usually takes 1–2 business days.
-          </Text>
-        </View>
-      </View>
-    )
-  }
-
-  // REJECTED state
-  if (doctor.verification_status === 'REJECTED') {
-    return (
-      <View style={styles.container}>
-        <PendingHeader doctor={doctor} onSignOut={handleSignOut} />
-        <View style={styles.center}>
-          <Ionicons name="close-circle-outline" size={64} color="#e74c3c" />
-          <Text style={[styles.pendingTitle, { color: '#e74c3c' }]}>Application Not Approved</Text>
-          <Text style={styles.pendingBody}>
-            Unfortunately your registration was not approved. Please contact support at support@rasbros.com.
-          </Text>
-        </View>
-      </View>
-    )
-  }
-
-  // APPROVED — full dashboard
-  const initials = `${doctor.first_name[0]}${doctor.last_name[0]}`.toUpperCase()
-
-  return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
-          <View style={styles.headerInfo}>
-            <View style={styles.nameRow}>
-              <Text style={styles.doctorName}>Dr. {doctor.first_name} {doctor.last_name}</Text>
-              <View style={styles.verifiedBadge}>
-                <Ionicons name="checkmark-circle" size={13} color="#fff" />
-                <Text style={styles.verifiedText}>Verified</Text>
-              </View>
-            </View>
-            <Text style={styles.specialization}>{SPEC[doctor.specialization] ?? doctor.specialization}</Text>
-          </View>
-          <TouchableOpacity
-            onPress={async () => {
-              const { data: { session } } = await supabase.auth.getSession()
-              if (session) resolveAndOpenSupportWA(session.access_token, 'Hi, I need help with my Ayushpathi account.')
-            }}
-            style={[styles.signOutBtn, { marginRight: 4 }]}
-          >
-            <Text style={{ fontSize: 20 }}>💬</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleSignOut} style={styles.signOutBtn}>
-            <Ionicons name="log-out-outline" size={20} color="rgba(255,255,255,0.8)" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <ScrollView
-        style={styles.body}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1a6b3a" />}
-      >
-        {/* Stats row */}
-        <View style={styles.statsRow}>
-          <StatCard value={todayApts.length} label="Today" icon="today-outline" />
-          <StatCard value={upcomingCount} label="Upcoming" icon="calendar-outline" />
-          <StatCard value={totalPatients} label="Patients" icon="people-outline" />
-        </View>
-
-        {/* Today's appointments */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Today's Appointments</Text>
-          {todayApts.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Ionicons name="checkmark-circle-outline" size={32} color="#a8d5b5" />
-              <Text style={styles.emptyText}>No appointments today</Text>
-            </View>
-          ) : (
-            todayApts.map(apt => (
-              <AptRow
-                key={apt.id}
-                apt={apt}
-                onPress={() => router.push(`/consultation?appointmentId=${apt.id}`)}
-              />
-            ))
-          )}
-        </View>
-
-        {/* Quick actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsGrid}>
-            <ActionCard
-              icon="time-outline"
-              label="Set Availability"
-              color="#1a6b3a"
-              onPress={() => router.push('/doctor-availability')}
-            />
-            <ActionCard
-              icon="document-text-outline"
-              label="My Consultations"
-              color="#2e86ab"
-              onPress={() => router.push('/my-consultations')}
-              comingSoon
-            />
-            <ActionCard
-              icon="stats-chart-outline"
-              label="Analytics"
-              color="#8b5cf6"
-              onPress={() => {}}
-              comingSoon
-            />
-            <ActionCard
-              icon="storefront-outline"
-              label="E-Pharmacy"
-              color="#f59e0b"
-              onPress={() => {}}
-              comingSoon
-            />
-          </View>
-        </View>
-
-        <View style={{ height: 32 }} />
-      </ScrollView>
-    </View>
-  )
-}
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function PendingHeader({ doctor, onSignOut }: { doctor: DoctorProfile; onSignOut: () => void }) {
-  return (
-    <View style={styles.header}>
-      <View style={styles.headerTop}>
-        <View style={styles.headerInfo}>
-          <Text style={styles.doctorName}>Dr. {doctor.first_name} {doctor.last_name}</Text>
-        </View>
-        <TouchableOpacity onPress={onSignOut} style={styles.signOutBtn}>
-          <Ionicons name="log-out-outline" size={20} color="rgba(255,255,255,0.8)" />
+      <View style={s.center}>
+        <Text style={s.pendingIcon}>⏳</Text>
+        <Text style={s.pendingTitle}>Verification Pending</Text>
+        <Text style={s.pendingText}>Your account is under review. You'll be notified once approved.</Text>
+        <TouchableOpacity onPress={signOut} style={s.signOutBtn}>
+          <Text style={s.signOutText}>Sign Out</Text>
         </TouchableOpacity>
       </View>
-    </View>
-  )
-}
+    )
+  }
 
-function StatCard({ value, label, icon }: { value: number; label: string; icon: string }) {
-  return (
-    <View style={styles.statCard}>
-      <Ionicons name={icon as any} size={20} color="#1a6b3a" style={{ marginBottom: 4 }} />
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  )
-}
-
-function AptRow({ apt, onPress }: { apt: Appointment; onPress: () => void }) {
-  const date = new Date(apt.scheduled_at)
-  const time = date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
-  const patientName = apt.patient
-    ? `${apt.patient.first_name} ${apt.patient.last_name}`
-    : 'Unknown Patient'
-  const statusColor = STATUS_COLOR[apt.status] ?? '#888'
+  const activeApts  = todayApts.filter(a => ['BOOKED','CONFIRMED','ARRIVED','IN_PROGRESS'].includes(a.status))
+  const completedApts = todayApts.filter(a => a.status === 'COMPLETED')
 
   return (
-    <TouchableOpacity style={styles.aptRow} onPress={onPress} activeOpacity={0.7}>
-      <View style={[styles.timeBlock, { borderLeftColor: statusColor }]}>
-        <Text style={styles.aptTime}>{time}</Text>
-      </View>
-      <View style={styles.aptInfo}>
-        <Text style={styles.aptPatient}>{patientName}</Text>
-        <View style={styles.aptBadgeRow}>
-          <View style={[styles.statusBadge, { backgroundColor: statusColor + '20' }]}>
-            <Text style={[styles.statusText, { color: statusColor }]}>{apt.status}</Text>
+    <>
+      <ScrollView
+        style={s.container}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16A34A" />}
+      >
+        {/* Header */}
+        <View style={s.header}>
+          <View style={{ flex: 1 }}>
+            <Text style={s.greeting}>Good {greeting()}</Text>
+            <Text style={s.doctorName}>Dr. {doctor?.first_name} {doctor?.last_name}</Text>
+            <Text style={s.spec}>{SPEC[doctor?.ayush_specialization ?? ''] ?? doctor?.ayush_specialization}</Text>
           </View>
-          {apt.type === 'TELECONSULT' && (
-            <View style={styles.teleconsultBadge}>
-              <Ionicons name="videocam-outline" size={11} color="#2e86ab" />
-              <Text style={styles.teleconsultText}>Teleconsult</Text>
-            </View>
-          )}
+          <View style={s.headerActions}>
+            <TouchableOpacity onPress={() => resolveAndOpenSupportWA()} style={s.headerBtn}>
+              <Text style={s.headerBtnIcon}>💬</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={signOut} style={s.headerBtn}>
+              <Ionicons name="log-out-outline" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-      <Ionicons name="chevron-forward" size={16} color="#ccc" />
-    </TouchableOpacity>
+
+        {/* Stats */}
+        <View style={s.statsRow}>
+          {[
+            { label: "Today's Patients", value: todayApts.length, color: '#EFF6FF', border: '#BFDBFE', text: '#1E40AF' },
+            { label: 'Active Now',       value: activeApts.length, color: '#FFF7ED', border: '#FED7AA', text: '#92400E' },
+            { label: 'Completed Today',  value: completedApts.length, color: '#ECFDF5', border: '#A7F3D0', text: '#065F46' },
+            { label: 'Upcoming',         value: upcomingCount, color: '#F5F3FF', border: '#DDD6FE', text: '#5B21B6' },
+          ].map(stat => (
+            <View key={stat.label} style={[s.statCard, { backgroundColor: stat.color, borderColor: stat.border }]}>
+              <Text style={[s.statNum, { color: stat.text }]}>{stat.value}</Text>
+              <Text style={[s.statLabel, { color: stat.text }]}>{stat.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        {pendingRx > 0 && (
+          <View style={s.rxBanner}>
+            <Text style={s.rxBannerText}>⚠️ {pendingRx} prescription{pendingRx > 1 ? 's' : ''} pending your sign-off</Text>
+          </View>
+        )}
+
+        {/* Today's Queue */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Today's Queue</Text>
+          <Text style={s.sectionDate}>
+            {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </Text>
+        </View>
+
+        {todayApts.length === 0 ? (
+          <View style={s.emptyBox}>
+            <Text style={s.emptyIcon}>📅</Text>
+            <Text style={s.emptyText}>No appointments today</Text>
+          </View>
+        ) : todayApts.map(apt => (
+          <View key={apt.id} style={s.aptCard}>
+            <View style={s.aptRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.aptName}>{apt.patient?.first_name} {apt.patient?.last_name}</Text>
+                <Text style={s.aptTime}>{apt.start_time?.slice(0, 5)} – {apt.end_time?.slice(0, 5)}</Text>
+                <Text style={s.aptType}>{apt.type === 'TELECONSULT' ? '💻 Teleconsult' : '🏥 In-person'}</Text>
+              </View>
+              <View style={[s.aptStatus, { backgroundColor: (STATUS_COLOR[apt.status] ?? '#9CA3AF') + '22' }]}>
+                <Text style={[s.aptStatusText, { color: STATUS_COLOR[apt.status] ?? '#9CA3AF' }]}>
+                  {apt.status.replace('_', ' ')}
+                </Text>
+              </View>
+            </View>
+
+            {/* Actions */}
+            <View style={s.aptActions}>
+              {['ARRIVED', 'IN_PROGRESS', 'COMPLETED'].includes(apt.status) && (
+                <TouchableOpacity
+                  style={s.consultBtn}
+                  onPress={() => setConsultApt(apt)}
+                >
+                  <Ionicons name="document-text-outline" size={14} color="#fff" />
+                  <Text style={s.consultBtnText}>
+                    {apt.status === 'COMPLETED' ? 'Add Notes' : 'Start Consultation'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {apt.patient?.mobile && (
+                <TouchableOpacity
+                  style={s.waAptBtn}
+                  onPress={() => {
+                    const { Linking } = require('react-native')
+                    Linking.openURL(`https://wa.me/${apt.patient!.mobile.replace(/\D/g, '')}`)
+                  }}
+                >
+                  <Text style={s.waAptBtnText}>💬</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        ))}
+
+        {/* Quick Nav */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>Quick Actions</Text>
+        </View>
+        <View style={s.quickActions}>
+          <TouchableOpacity style={s.quickBtn} onPress={() => router.push('/doctor-availability')}>
+            <Text style={s.quickIcon}>🗓️</Text>
+            <Text style={s.quickLabel}>Availability</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.quickBtn} onPress={() => router.push('/consultation')}>
+            <Text style={s.quickIcon}>🩺</Text>
+            <Text style={s.quickLabel}>Consultations</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.quickBtn} onPress={() => resolveAndOpenSupportWA()}>
+            <Text style={s.quickIcon}>💬</Text>
+            <Text style={s.quickLabel}>Support</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: 48 }} />
+      </ScrollView>
+
+      {/* Consultation Modal */}
+      {consultApt && doctor && (
+        <ConsultationModal
+          appointment={consultApt}
+          doctorId={doctor.id}
+          onClose={() => setConsultApt(null)}
+          onSaved={load}
+        />
+      )}
+    </>
   )
 }
 
-function ActionCard({
-  icon, label, color, onPress, comingSoon,
-}: { icon: string; label: string; color: string; onPress: () => void; comingSoon?: boolean }) {
-  return (
-    <TouchableOpacity
-      style={styles.actionCard}
-      onPress={comingSoon ? () => {} : onPress}
-      activeOpacity={0.75}
-    >
-      <View style={[styles.actionIcon, { backgroundColor: color + '18' }]}>
-        <Ionicons name={icon as any} size={22} color={color} />
-      </View>
-      <Text style={styles.actionLabel}>{label}</Text>
-      {comingSoon && <Text style={styles.comingSoon}>Soon</Text>}
-    </TouchableOpacity>
-  )
+function greeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'morning'
+  if (h < 17) return 'afternoon'
+  return 'evening'
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0f7f4' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: '#f0f7f4' },
-  errorText: { fontSize: 16, color: '#888' },
-  pendingTitle: { fontSize: 20, fontWeight: '700', color: '#222', marginTop: 16, textAlign: 'center' },
-  pendingBody: { fontSize: 14, color: '#666', marginTop: 10, textAlign: 'center', lineHeight: 20 },
-  header: { backgroundColor: '#1a6b3a', paddingTop: 56, paddingBottom: 24, paddingHorizontal: 16 },
-  headerTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: {
-    width: 48, height: 48, borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center',
+// ── Styles ────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, backgroundColor: '#F9FAFB' },
+  pendingIcon: { fontSize: 48, marginBottom: 12 },
+  pendingTitle: { fontSize: 20, fontWeight: '700', color: '#111827', marginBottom: 8 },
+  pendingText: { fontSize: 14, color: '#6B7280', textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  signOutBtn: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, paddingHorizontal: 20, paddingVertical: 10 },
+  signOutText: { color: '#EF4444', fontWeight: '600' },
+  header: {
+    backgroundColor: '#166534', paddingTop: 56, paddingBottom: 20,
+    paddingHorizontal: 20, flexDirection: 'row', alignItems: 'flex-start',
   },
-  avatarText: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  headerInfo: { flex: 1 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  doctorName: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  verifiedBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 10,
-    paddingHorizontal: 7, paddingVertical: 2,
-  },
-  verifiedText: { color: '#fff', fontSize: 10, fontWeight: '600' },
-  specialization: { color: 'rgba(255,255,255,0.75)', fontSize: 13, marginTop: 2 },
-  signOutBtn: { padding: 6 },
-  body: { flex: 1 },
-  statsRow: { flexDirection: 'row', padding: 16, gap: 10 },
+  greeting: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
+  doctorName: { color: '#fff', fontSize: 22, fontWeight: '700', marginTop: 2 },
+  spec: { color: '#A7F3D0', fontSize: 13, marginTop: 2 },
+  headerActions: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  headerBtn: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 8, padding: 8 },
+  headerBtnIcon: { fontSize: 18 },
+  statsRow: { flexDirection: 'row', flexWrap: 'wrap', padding: 12, gap: 10 },
   statCard: {
-    flex: 1, backgroundColor: '#fff', borderRadius: 14, padding: 14,
-    alignItems: 'center', borderWidth: 1, borderColor: '#d0e8da',
+    width: '47%', borderRadius: 12, padding: 14,
+    borderWidth: 1, alignItems: 'center',
   },
-  statValue: { fontSize: 26, fontWeight: '800', color: '#1a6b3a' },
-  statLabel: { fontSize: 11, color: '#888', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.4 },
-  section: { marginHorizontal: 16, marginBottom: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#222', marginBottom: 10 },
-  emptyCard: {
-    backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#d0e8da',
-    alignItems: 'center', justifyContent: 'center', padding: 32, gap: 8,
-  },
-  emptyText: { color: '#aaa', fontSize: 14 },
-  aptRow: {
-    backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#d0e8da',
-    flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8, overflow: 'hidden',
-  },
-  timeBlock: {
-    borderLeftWidth: 3, borderLeftColor: '#1a6b3a',
-    paddingHorizontal: 12, paddingVertical: 16, minWidth: 72, alignItems: 'center',
-  },
-  aptTime: { fontSize: 13, fontWeight: '700', color: '#222' },
-  aptInfo: { flex: 1 },
-  aptPatient: { fontSize: 15, fontWeight: '600', color: '#222', marginBottom: 4 },
-  aptBadgeRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  statusBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
-  statusText: { fontSize: 11, fontWeight: '600' },
-  teleconsultBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: '#e8f4fb', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2,
-  },
-  teleconsultText: { fontSize: 11, color: '#2e86ab', fontWeight: '600' },
-  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  actionCard: {
-    backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#d0e8da',
-    width: '47%', padding: 16, alignItems: 'center', position: 'relative',
-  },
-  actionIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  actionLabel: { fontSize: 13, fontWeight: '600', color: '#222', textAlign: 'center' },
-  comingSoon: {
-    position: 'absolute', top: 8, right: 8,
-    fontSize: 9, color: '#aaa', backgroundColor: '#f5f5f5',
-    borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, fontWeight: '600',
-  },
+  statNum: { fontSize: 28, fontWeight: '800' },
+  statLabel: { fontSize: 11, fontWeight: '600', marginTop: 2, textAlign: 'center' },
+  rxBanner: { backgroundColor: '#FEF3C7', marginHorizontal: 16, marginBottom: 8, borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#FDE68A' },
+  rxBannerText: { fontSize: 13, color: '#92400E', fontWeight: '600' },
+  section: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 6 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#111827' },
+  sectionDate: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  emptyBox: { alignItems: 'center', padding: 40 },
+  emptyIcon: { fontSize: 36, marginBottom: 8 },
+  emptyText: { fontSize: 14, color: '#9CA3AF' },
+  aptCard: { backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 10, borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#E5E7EB' },
+  aptRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
+  aptName: { fontSize: 15, fontWeight: '700', color: '#111827' },
+  aptTime: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  aptType: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  aptStatus: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
+  aptStatusText: { fontSize: 11, fontWeight: '600' },
+  aptActions: { flexDirection: 'row', gap: 8 },
+  consultBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#166534', borderRadius: 7, paddingHorizontal: 12, paddingVertical: 7, flex: 1 },
+  consultBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  waAptBtn: { borderWidth: 1, borderColor: '#D1FAE5', borderRadius: 7, paddingHorizontal: 10, paddingVertical: 7, alignItems: 'center' },
+  waAptBtnText: { fontSize: 16 },
+  quickActions: { flexDirection: 'row', paddingHorizontal: 16, gap: 10 },
+  quickBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
+  quickIcon: { fontSize: 24, marginBottom: 6 },
+  quickLabel: { fontSize: 12, fontWeight: '600', color: '#374151' },
+})
+
+const cm = StyleSheet.create({
+  header: { backgroundColor: '#fff', paddingTop: 56, paddingBottom: 14, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', flexDirection: 'row', alignItems: 'center', gap: 12 },
+  closeBtn: { padding: 4 },
+  title: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  sub: { fontSize: 12, color: '#6B7280', marginTop: 2 },
+  body: { flex: 1, padding: 20, backgroundColor: '#F9FAFB' },
+  label: { fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 6, marginTop: 16 },
+  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 12, fontSize: 15, color: '#111827' },
+  errorBox: { backgroundColor: '#FEE2E2', borderRadius: 8, padding: 12, marginBottom: 8 },
+  errorText: { color: '#DC2626', fontSize: 13 },
+  saveBtn: { backgroundColor: '#166534', borderRadius: 10, padding: 15, alignItems: 'center', marginTop: 24 },
+  saveBtnDisabled: { opacity: 0.5 },
+  saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 })
