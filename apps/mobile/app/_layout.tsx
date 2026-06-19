@@ -4,7 +4,7 @@ import { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { registerForPushNotifications, useNotificationListeners } from '../lib/push-notifications'
 
-type UserRole = 'patient' | 'doctor-approved' | 'doctor-pending' | 'unknown'
+type UserRole = 'patient' | 'doctor-approved' | 'doctor-pending' | 'receptionist' | 'unknown'
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null)
@@ -14,13 +14,20 @@ export default function RootLayout() {
   const segments = useSegments()
 
   async function detectRole(userId: string): Promise<UserRole> {
-    // Check doctor table first
+    // Check receptionist table first
+    const { data: recRow } = await supabase
+      .from('receptionist')
+      .select('id')
+      .eq('auth_user_id', userId)
+      .maybeSingle()
+    if (recRow) return 'receptionist'
+
+    // Check doctor table
     const { data: doctorRow } = await supabase
       .from('doctor')
       .select('verification_status')
       .eq('auth_user_id', userId)
       .maybeSingle()
-
     if (doctorRow) {
       return doctorRow.verification_status === 'APPROVED'
         ? 'doctor-approved'
@@ -49,7 +56,6 @@ export default function RootLayout() {
       if (session) {
         const r = await detectRole(session.user.id)
         setRole(r)
-        // Register push token after login
         registerForPushNotifications(session.user.id).catch(console.error)
       }
       setLoading(false)
@@ -69,18 +75,15 @@ export default function RootLayout() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Listen for incoming push notifications and handle taps
+  // Listen for notification taps and route accordingly
   useEffect(() => {
     const cleanup = useNotificationListeners(
-      undefined, // foreground notifications handled automatically
+      undefined,
       (response) => {
-        // Route to relevant screen based on notification data
         const data = response.notification.request.content.data as Record<string, string>
-        if (data?.type === 'appointment' && data?.appointment_id) {
-          router.push('/(tabs)/appointments')
-        } else if (data?.type === 'consultation' && data?.consultation_id) {
-          router.push('/consultation')
-        }
+        if (data?.type === 'appointment') router.push('/(tabs)/appointments')
+        else if (data?.type === 'consultation') router.push('/consultation')
+        else if (data?.type === 'queue') router.push('/(receptionist)/')
       }
     )
     return cleanup
@@ -89,10 +92,11 @@ export default function RootLayout() {
   useEffect(() => {
     if (loading) return
 
-    const inAuthGroup       = segments[0] === '(auth)'
-    const inPending         = segments[0] === 'pending-approval'
-    const inDoctorDashboard = segments[0] === 'doctor-dashboard'
-    const inTabs            = segments[0] === '(tabs)'
+    const inAuthGroup        = segments[0] === '(auth)'
+    const inPending          = segments[0] === 'pending-approval'
+    const inDoctorDashboard  = segments[0] === 'doctor-dashboard'
+    const inTabs             = segments[0] === '(tabs)'
+    const inReceptionist     = segments[0] === '(receptionist)'
 
     if (!session) {
       if (!inAuthGroup) router.replace('/(auth)/login')
@@ -100,6 +104,9 @@ export default function RootLayout() {
     }
 
     switch (role) {
+      case 'receptionist':
+        if (!inReceptionist) router.replace('/(receptionist)/')
+        break
       case 'doctor-approved':
         if (!inDoctorDashboard) router.replace('/doctor-dashboard')
         break
@@ -108,7 +115,7 @@ export default function RootLayout() {
         break
       case 'patient':
       case 'unknown':
-        if (inAuthGroup || inPending || inDoctorDashboard) router.replace('/(tabs)/')
+        if (inAuthGroup || inPending || inDoctorDashboard || inReceptionist) router.replace('/(tabs)/')
         break
     }
   }, [session, role, segments, loading])
@@ -117,6 +124,7 @@ export default function RootLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="(receptionist)" />
       <Stack.Screen name="pending-approval" />
       <Stack.Screen name="doctor-dashboard" />
       <Stack.Screen name="doctor-availability" />
