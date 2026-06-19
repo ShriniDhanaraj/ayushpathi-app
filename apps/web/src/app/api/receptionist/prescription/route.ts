@@ -9,13 +9,17 @@ export async function POST(req: NextRequest) {
     appointment_id,
     chief_complaint, diagnosis, notes, next_visit_date,
     medicines, instructions, is_repeat = false,
+    entered_by,                          // auth.users.id of the person submitting
+    entered_by_role = 'RECEPTIONIST',    // 'DOCTOR' | 'RECEPTIONIST'
+    entry_method = 'RECEPTIONIST',       // 'DOCTOR_DIRECT' | 'RECEPTIONIST' | 'SCANNED'
+    prescription_image_url,              // future: scanned image
   } = body
 
   if (!medicines?.length) {
     return NextResponse.json({ error: 'medicines array is required' }, { status: 400 })
   }
 
-  // Resolve patient_id + doctor_id from appointment (receptionist doesn't pass them directly)
+  // Resolve patient_id + doctor_id from appointment
   let patient_id: string
   let doctor_id: string
 
@@ -29,7 +33,6 @@ export async function POST(req: NextRequest) {
     patient_id = apt.patient_id
     doctor_id = apt.doctor_id
   } else {
-    // Fallback: caller must supply them
     if (!body.patient_id || !body.doctor_id) {
       return NextResponse.json({ error: 'appointment_id or patient_id+doctor_id required' }, { status: 400 })
     }
@@ -67,9 +70,20 @@ export async function POST(req: NextRequest) {
     consultation_id = data.id
   }
 
-  // Insert prescription
+  // Insert prescription with full audit fields
   const { data: rx, error: rxErr } = await supabase.from('prescription')
-    .insert({ consultation_id, patient_id, doctor_id, medicines, instructions: instructions ?? null, is_repeat })
+    .insert({
+      consultation_id, patient_id, doctor_id,
+      medicines, instructions: instructions ?? null, is_repeat,
+      entered_by: entered_by ?? null,
+      entered_by_role,
+      entry_method,
+      prescription_image_url: prescription_image_url ?? null,
+      // Doctor-entered prescriptions are auto-verified; receptionist entries need doctor sign-off
+      verified_by_doctor: entered_by_role === 'DOCTOR',
+      verified_at: entered_by_role === 'DOCTOR' ? new Date().toISOString() : null,
+      verified_by_doctor_id: entered_by_role === 'DOCTOR' ? doctor_id : null,
+    })
     .select().single()
   if (rxErr) return NextResponse.json({ error: rxErr.message }, { status: 500 })
 
