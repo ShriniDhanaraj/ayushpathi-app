@@ -10,8 +10,8 @@ Ayushpathi: India-based AYUSH (Ayurveda, Yoga, Unani, Siddha, Homeopathy) health
 - **Live URL:** https://www.rasbros.com (Vercel, auto-deploys on push to main)
 - **WhatsApp:** wa.me deep links only — NO third-party API
 
-## Current State — Session 10 Starting Point
-**Last commit:** `d646a88` — fix useSearchParams Suspense wrapper (build passing)  
+## Current State — Session 11 Starting Point
+**Last commit:** `6f34005` — Session 10: patient dashboard, doctor browse, teleconsult links, push notifications  
 **PAT:** ghp_REDACTED_SEE_COWORK_PROJECT_FOLDER (valid until 16 Jul 2026)  
 **Supabase URL:** https://urrccvyiibqcfqfjgedp.supabase.co  
 **Anon key:** eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVycmNjdnlpaWJxY2ZxZmpnZWRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3ODQ0MTUsImV4cCI6MjA5NzM2MDQxNX0.9QBFB174ZmbmpdnsR8c7pA_ZaE3Xt1bhDBNDbnlSc2s
@@ -83,6 +83,7 @@ Doctor-entered → `verified_by_doctor = TRUE` automatically.
 | `20260619_fix_near_me.sql` | `supabase/migrations/` | ✅ Session 8 |
 | `20260619_whatsapp_populate.sql` | `supabase/migrations/` | ✅ Session 8 |
 | `20260619_doctor_availability_seed.sql` | `supabase/migrations/` | ✅ Session 8 |
+| `20260626_teleconsult_url.sql` | `supabase/migrations/` | ⏳ Apply in Session 11 |
 
 ## Seed Data Applied to Production
 | File | Location | Status |
