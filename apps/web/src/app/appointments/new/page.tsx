@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getSupabaseClient } from '@/lib/supabase'
 
@@ -40,7 +40,8 @@ function generateSlots(availability: { start_time: string; end_time: string; slo
   return slots
 }
 
-export default function BookAppointmentPage() {
+// Inner component uses useSearchParams — must be wrapped in <Suspense> by the parent.
+function BookAppointmentInner() {
   const router = useRouter()
   const [step, setStep] = useState<Step>(1)
   const [spec, setSpec] = useState('')
@@ -74,7 +75,7 @@ export default function BookAppointmentPage() {
         setDoctors([doc])
         setStep(2)
       })
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function searchDoctors() {
     setSearching(true)
@@ -111,7 +112,7 @@ export default function BookAppointmentPage() {
     setSlots(generateSlots(avail ?? [], selectedDate))
   }
 
-  useEffect(() => { loadSlots() }, [selectedDoctor, selectedDate])
+  useEffect(() => { loadSlots() }, [selectedDoctor, selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function confirmBooking() {
     if (!selectedSlot || !selectedDoctor) return
@@ -317,5 +318,18 @@ export default function BookAppointmentPage() {
         )}
       </main>
     </div>
+  )
+}
+
+// Next.js 14 requires useSearchParams() to be inside a <Suspense> boundary at build time.
+export default function BookAppointmentPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-400 text-sm">Loading…</p>
+      </div>
+    }>
+      <BookAppointmentInner />
+    </Suspense>
   )
 }
