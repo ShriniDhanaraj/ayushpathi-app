@@ -141,6 +141,12 @@ export default function LoginPage() {
               />
             </div>
 
+            <div className="text-right -mt-1">
+              <Link href="/auth/forgot-password" className="text-xs text-brand-600 hover:underline">
+                {T.forgotPassword}
+              </Link>
+            </div>
+
             {error && (
               <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
                 <span className="text-red-500 text-sm mt-0.5">⚠</span>
