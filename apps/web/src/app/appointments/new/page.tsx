@@ -123,7 +123,7 @@ function BookAppointmentInner() {
     const { data: patient } = await supabase.from('patient').select('id').eq('auth_user_id', user.id).single()
     if (!patient) { setLoading(false); return }
 
-    await supabase.from('appointment').insert({
+    const { data: inserted } = await supabase.from('appointment').insert({
       patient_id: patient.id,
       doctor_id: selectedDoctor.id,
       appointment_date: selectedSlot.date,
@@ -132,7 +132,22 @@ function BookAppointmentInner() {
       type,
       status: 'BOOKED',
       booked_by_role: 'PATIENT',
-    })
+    }).select('id').single()
+
+    // Auto-generate Jitsi link for teleconsults
+    if (type === 'TELECONSULT' && inserted?.id) {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        await fetch('/api/appointments/teleconsult', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ appointment_id: inserted.id }),
+        })
+      }
+    }
     router.push('/dashboard/patient?booked=1')
   }
 

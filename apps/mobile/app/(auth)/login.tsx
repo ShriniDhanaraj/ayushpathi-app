@@ -7,6 +7,8 @@ import { Link } from 'expo-router'
 import { Picker } from '@react-native-picker/picker'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../../lib/supabase'
+import * as Notifications from 'expo-notifications'
+import * as Device from 'expo-device'
 
 // Supported languages (mirrors lookup_language table)
 const LANGUAGES = [
@@ -38,6 +40,25 @@ const SIGN_IN_LABEL: Record<string, string> = {
 const FRIENDLY: Record<string, string> = {
   'Invalid login credentials': 'Incorrect email or password.',
   'Email not confirmed': 'Please verify your email first.',
+}
+
+async function registerPushToken(userId: string, accessToken: string) {
+  try {
+    if (!Device.isDevice) return // no token on emulators
+    const { status: existingStatus } = await Notifications.getPermissionsAsync()
+    let finalStatus = existingStatus
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync()
+      finalStatus = status
+    }
+    if (finalStatus !== 'granted') return
+    const tokenData = await Notifications.getExpoPushTokenAsync()
+    await fetch(`${process.env.EXPO_PUBLIC_API_URL ?? 'https://www.rasbros.com'}/api/push/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, token: tokenData.data, platform: 'expo' }),
+    })
+  } catch {}
 }
 
 export default function LoginScreen() {
@@ -85,6 +106,14 @@ export default function LoginScreen() {
 
     // Persist derived language so the rest of the app can use it
     await AsyncStorage.setItem('ayushpathi_ui_lang', derivedLang)
+
+    // Register push notification token
+    if (data.user) {
+      const { data: { session: freshSession } } = await supabase.auth.getSession()
+      if (freshSession) {
+        registerPushToken(data.user.id, freshSession.access_token)
+      }
+    }
 
     // Navigation is handled by the _layout.tsx onAuthStateChange listener
     setLoading(false)
