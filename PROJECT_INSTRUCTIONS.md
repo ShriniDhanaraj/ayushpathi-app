@@ -10,8 +10,8 @@ Ayushpathi: India-based AYUSH (Ayurveda, Yoga, Unani, Siddha, Homeopathy) health
 - **Live URL:** https://www.rasbros.com (Vercel, auto-deploys on push to main)
 - **WhatsApp:** wa.me deep links only — NO third-party API
 
-## Current State — Session 9 Starting Point
-**Last commit:** `38ae925` — doctor profile page, web booking, hospital admin verify UI, near-me fix  
+## Current State — Session 10 Starting Point
+**Last commit:** `d646a88` — fix useSearchParams Suspense wrapper (build passing)  
 **PAT:** ghp_REDACTED_SEE_COWORK_PROJECT_FOLDER (valid until 16 Jul 2026)  
 **Supabase URL:** https://urrccvyiibqcfqfjgedp.supabase.co  
 **Anon key:** eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVycmNjdnlpaWJxY2ZxZmpnZWRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3ODQ0MTUsImV4cCI6MjA5NzM2MDQxNX0.9QBFB174ZmbmpdnsR8c7pA_ZaE3Xt1bhDBNDbnlSc2s
@@ -79,6 +79,10 @@ Doctor-entered → `verified_by_doctor = TRUE` automatically.
 | `20260619_patient_family.sql` | `supabase/migrations/` |
 | `20260619_doctor_address.sql` | `supabase/migrations/` |
 | `20260619_multilang.sql` | `supabase/migrations/` | ✅ Session 7 |
+| `20260619_multilang_seed.sql` | `supabase/migrations/` | ✅ Session 7 |
+| `20260619_fix_near_me.sql` | `supabase/migrations/` | ✅ Session 8 |
+| `20260619_whatsapp_populate.sql` | `supabase/migrations/` | ✅ Session 8 |
+| `20260619_doctor_availability_seed.sql` | `supabase/migrations/` | ✅ Session 8 |
 
 ## Seed Data Applied to Production
 | File | Location | Status |
@@ -147,7 +151,11 @@ patient_3        = e1000000-0000-0000-0000-000000000003  Mohan Pillai
 ✅ **Doctor public profile page** (Session 8) — `/doctor/[id]` with specialization, languages, availability, hospitals, Book button
 ✅ **Web appointment booking doctor pre-select** (Session 8) — `/appointments/new?doctor=[id]` skips to slot picker
 ✅ **Hospital admin doctor verification UI** (Session 8) — approve/reject pending doctors with inline rejection reason
-✅ **WhatsApp numbers SQL** (Session 8) — `20260619_whatsapp_populate.sql` ready to run
+✅ **WhatsApp numbers populated** (Session 8) — `20260619_whatsapp_populate.sql` run ✅
+✅ **Doctor availability seeded** (Session 8) — all 14 demo doctors have weekly schedules
+✅ **Near-me address fallback** (Session 8) — Nominatim geocoding when GPS denied
+✅ **Forgot / reset password** (Session 8) — `/auth/forgot-password` + `/auth/reset-password`
+✅ **CI build fixed** (Session 8) — `useSearchParams` wrapped in `<Suspense>` (commit `d646a88`)
 
 ## Multilingual Demo Users (Session 7 seed, password `Ayush@2026!`)
 | Email | Name | UI Lang | Consult Lang |
@@ -169,15 +177,15 @@ patient_3        = e1000000-0000-0000-0000-000000000003  Mohan Pillai
 | dr.padmavathi@demo.ayushpathi.in | Dr. Padmavathi Reddy (AYU) | TE | speaks TE, HI, EN |
 | dr.debabrata@demo.ayushpathi.in | Dr. Debabrata Sen (HOM) | BN | speaks BN, EN, HI |
 
-## What's NOT Built Yet — Session 9 Priorities
-1. **Teleconsult join link** — video URL for TELECONSULT appointments (generate on booking, show to patient + doctor)
-2. **Push notification wiring** — save token on login, send next-visit reminders + status-change alerts
-3. **SMS/OTP login** — replace email+password with Supabase phone OTP for patients
-4. **OCR prescription pipeline** — `entry_method='SCANNED'`, image upload → OCR → prefill form
-5. **Patient dashboard web page** (`/dashboard/patient`) — appointments list view
-6. **Doctor general listing page** (`/doctors`) — for users who don't share location
-7. **Global admin web UI** — dedicated page for GLOBAL scope admins
-8. **Real WhatsApp numbers** — replace dummy `9194440000xx` with real clinic numbers before go-live
+## What's NOT Built Yet — Session 10 Priorities
+1. **Patient dashboard web page** (`/dashboard/patient`) — upcoming + past appointments, cancel, Book Again
+2. **Doctor general listing page** (`/doctors`) — browsable list without GPS; filter by spec/language/city
+3. **Teleconsult join link** — generate video URL (Whereby/Jitsi/wa.me), store on appointment, show to patient + doctor
+4. **Push notification wiring** — save token on login, send next-visit reminders + status-change alerts
+5. **SMS/OTP login** — replace email+password with Supabase phone OTP for patients
+6. **Global admin web UI** — dedicated page for GLOBAL scope admins (platform owner)
+7. **Real WhatsApp numbers** — replace dummy `9194440000xx` before go-live
+8. **⚠️ Fix Supabase Site URL** — change from `http://localhost:3000` → `https://www.rasbros.com` in Auth → URL Configuration
 
 ## API Bugs Fixed (do not re-introduce)
 - `/api/appointments/[id]/cancel` — join patient table for auth_user_id (not patient_auth_id)
@@ -187,8 +195,8 @@ patient_3        = e1000000-0000-0000-0000-000000000003  Mohan Pillai
 
 ## Git Workflow
 ```bash
-cd /tmp && git clone https://github.com/ShriniDhanaraj/ayushpathi-app.git ayushpathi7
-cd ayushpathi7
+cd /sessions/<session-id>/work/ && git clone https://github.com/ShriniDhanaraj/ayushpathi-app.git ayushpathi10
+cd ayushpathi10
 git config user.email "dhanaraj.srini@gmail.com"
 git config user.name "Shri Raj"
 # make changes, then:
