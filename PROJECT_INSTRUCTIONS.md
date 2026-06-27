@@ -10,8 +10,8 @@ Ayushpathi: India-based AYUSH (Ayurveda, Yoga, Unani, Siddha, Homeopathy) health
 - **Live URL:** https://www.rasbros.com (Vercel, auto-deploys on push to main)
 - **WhatsApp:** wa.me deep links only — NO third-party API
 
-## Current State — Session 12 Starting Point
-**Last commit:** `a431a61` — fix: appointment refresh v2 — cascade delete + deduplicate patient_family  
+## Current State — Session 13 Starting Point
+**Last commit:** `52ccbdc` — feat: session 12 — receptionist/admin dashboards, consultation/new, patients/[id]  
 **PAT:** ghp_REDACTED_SEE_COWORK_PROJECT_FOLDER (valid until 31 Jul 2026)  
 **Supabase URL:** https://urrccvyiibqcfqfjgedp.supabase.co  
 **Anon key:** eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVycmNjdnlpaWJxY2ZxZmpnZWRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3ODQ0MTUsImV4cCI6MjA5NzM2MDQxNX0.9QBFB174ZmbmpdnsR8c7pA_ZaE3Xt1bhDBNDbnlSc2s
@@ -135,6 +135,9 @@ patient_2        = e1000000-0000-0000-0000-000000000002  Ananya Krishnan
 patient_3        = e1000000-0000-0000-0000-000000000003  Mohan Pillai
 ```
 
+## What's Built (Sessions 1–12)
+✅ **Session 12** — Receptionist dashboard (live appointments + GDPR lookup), Hospital admin dashboard (server-side, scoped stats), `/consultation/new` (doctor picks today's appointment to start), `/patients/[id]` (consent-gated patient detail + history)
+
 ## What's Built (Sessions 1–7)
 ✅ All 5 AYUSH roles (auth + routing)
 ✅ Patient registration + doctor registration + verification flow
@@ -185,14 +188,13 @@ patient_3        = e1000000-0000-0000-0000-000000000003  Mohan Pillai
 | dr.padmavathi@demo.ayushpathi.in | Dr. Padmavathi Reddy (AYU) | TE | speaks TE, HI, EN |
 | dr.debabrata@demo.ayushpathi.in | Dr. Debabrata Sen (HOM) | BN | speaks BN, EN, HI |
 
-## What's NOT Built Yet — Session 12 Priorities
-1. **Receptionist dashboard** (`/dashboard/receptionist`) — currently 404 after login
-2. **Hospital admin dashboard** (`/dashboard/admin`) — currently 404 after login
-3. **Doctor consultation flow** — `/consultation/new` + `/consultation/[id]` (Write prescription links here)
-4. **Patient individual view for doctor** (`/patients/[id]`) — "View →" in patients page; needs consent check
-5. **SMS/OTP login** — replace email+password with Supabase phone OTP for patients
-6. **Global admin web UI** — dedicated page for GLOBAL scope platform admins
-7. **Real WhatsApp numbers** — replace dummy `9194440000xx` before go-live
+## What's NOT Built Yet — Session 13 Priorities
+1. **SMS/OTP login** — replace email+password with Supabase phone OTP for patients
+2. **Global admin web UI** — `/dashboard/admin` serves all scopes now, but GLOBAL scope needs dedicated platform-wide management: manage hospitals, manage groups, add global admins
+3. **Real WhatsApp numbers** — replace dummy `9194440000xx` before go-live
+4. **Receptionist prescription entry UI** — `/receptionist/prescriptions/new` (quick action on receptionist dash links here — 404)
+5. **Patient registration web page** — `/patients/new` (linked from receptionist dash — needs form)
+6. **Test results upload page** — `/results/upload` (linked from receptionist dash — needs form)
 
 ## API Bugs Fixed (do not re-introduce)
 - `/api/appointments/[id]/cancel` — join patient table for auth_user_id (not patient_auth_id)
