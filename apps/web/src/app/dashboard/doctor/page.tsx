@@ -143,8 +143,8 @@ export default async function DoctorDashboard() {
           <div className="grid grid-cols-3 gap-2 sm:gap-4">
             {[
               { label: "Today's patients", value: stats.todayCount,     icon: '📅', href: '/appointments/today' },
-              { label: 'Upcoming',         value: stats.upcomingCount,  icon: '🗓', href: '/appointments/today' },
-              { label: 'Active patients',  value: stats.activePatients, icon: '👥', href: '/appointments/today' },
+              { label: 'Upcoming',         value: stats.upcomingCount,  icon: '🗓', href: '/appointments/upcoming' },
+              { label: 'Active patients',  value: stats.activePatients, icon: '👥', href: '/patients' },
             ].map(c => (
               <a key={c.label} href={c.href} className="card p-3 sm:p-5 space-y-2 sm:space-y-3 hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
