@@ -10,9 +10,9 @@ Ayushpathi: India-based AYUSH (Ayurveda, Yoga, Unani, Siddha, Homeopathy) health
 - **Live URL:** https://www.rasbros.com (Vercel, auto-deploys on push to main)
 - **WhatsApp:** wa.me deep links only — NO third-party API
 
-## Current State — Session 11 Starting Point
-**Last commit:** `6f34005` — Session 10: patient dashboard, doctor browse, teleconsult links, push notifications  
-**PAT:** ghp_REDACTED_SEE_COWORK_PROJECT_FOLDER (valid until 16 Jul 2026)  
+## Current State — Session 12 Starting Point
+**Last commit:** `a431a61` — fix: appointment refresh v2 — cascade delete + deduplicate patient_family  
+**PAT:** ghp_REDACTED_SEE_COWORK_PROJECT_FOLDER (valid until 31 Jul 2026)  
 **Supabase URL:** https://urrccvyiibqcfqfjgedp.supabase.co  
 **Anon key:** eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVycmNjdnlpaWJxY2ZxZmpnZWRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3ODQ0MTUsImV4cCI6MjA5NzM2MDQxNX0.9QBFB174ZmbmpdnsR8c7pA_ZaE3Xt1bhDBNDbnlSc2s
 
@@ -62,6 +62,9 @@ Doctor-entered → `verified_by_doctor = TRUE` automatically.
 - All key tables: `created_at`, `updated_at`, `created_by`, `updated_by`
 - Mobile: relative imports (`./lib/supabase`) | Web: `@/` alias
 - All SQL (migrations + seeds) committed to GitHub — never saved locally only
+- **Role routing** — ROLE_DASHBOARD keys: `patient`, `doctor`, `receptionist`, `hospital_admin`, `ayushpathi_admin`
+- **New test users** must have `raw_user_meta_data.role` set in `auth.users` at creation time — login page has DB fallback detection but setting it upfront avoids extra queries
+- **Never re-run old seeds** — use `ON CONFLICT DO NOTHING` and verify idempotency first
 
 ## All Migrations Applied to Production
 | File | Location |
@@ -83,7 +86,11 @@ Doctor-entered → `verified_by_doctor = TRUE` automatically.
 | `20260619_fix_near_me.sql` | `supabase/migrations/` | ✅ Session 8 |
 | `20260619_whatsapp_populate.sql` | `supabase/migrations/` | ✅ Session 8 |
 | `20260619_doctor_availability_seed.sql` | `supabase/migrations/` | ✅ Session 8 |
-| `20260626_teleconsult_url.sql` | `supabase/migrations/` | ⏳ Apply in Session 11 |
+| `20260626_teleconsult_url.sql` | `supabase/migrations/` | ✅ Applied Session 10 |
+| `20260627_enable_rls_missing_tables.sql` | `supabase/migrations/` | ✅ Applied Session 10 |
+| `20260627_backfill_user_roles.sql` | `supabase/migrations/` | ✅ Applied Session 11 |
+| `20260627_create_auth_users.sql` | `supabase/migrations/` | ✅ Applied Session 11 |
+| `20260627_refresh_appts_v2.sql` | `supabase/migrations/` | ✅ Applied Session 11 |
 
 ## Seed Data Applied to Production
 | File | Location | Status |
@@ -178,15 +185,14 @@ patient_3        = e1000000-0000-0000-0000-000000000003  Mohan Pillai
 | dr.padmavathi@demo.ayushpathi.in | Dr. Padmavathi Reddy (AYU) | TE | speaks TE, HI, EN |
 | dr.debabrata@demo.ayushpathi.in | Dr. Debabrata Sen (HOM) | BN | speaks BN, EN, HI |
 
-## What's NOT Built Yet — Session 10 Priorities
-1. **Patient dashboard web page** (`/dashboard/patient`) — upcoming + past appointments, cancel, Book Again
-2. **Doctor general listing page** (`/doctors`) — browsable list without GPS; filter by spec/language/city
-3. **Teleconsult join link** — generate video URL (Whereby/Jitsi/wa.me), store on appointment, show to patient + doctor
-4. **Push notification wiring** — save token on login, send next-visit reminders + status-change alerts
+## What's NOT Built Yet — Session 12 Priorities
+1. **Receptionist dashboard** (`/dashboard/receptionist`) — currently 404 after login
+2. **Hospital admin dashboard** (`/dashboard/admin`) — currently 404 after login
+3. **Doctor consultation flow** — `/consultation/new` + `/consultation/[id]` (Write prescription links here)
+4. **Patient individual view for doctor** (`/patients/[id]`) — "View →" in patients page; needs consent check
 5. **SMS/OTP login** — replace email+password with Supabase phone OTP for patients
-6. **Global admin web UI** — dedicated page for GLOBAL scope admins (platform owner)
+6. **Global admin web UI** — dedicated page for GLOBAL scope platform admins
 7. **Real WhatsApp numbers** — replace dummy `9194440000xx` before go-live
-8. **⚠️ Fix Supabase Site URL** — change from `http://localhost:3000` → `https://www.rasbros.com` in Auth → URL Configuration
 
 ## API Bugs Fixed (do not re-introduce)
 - `/api/appointments/[id]/cancel` — join patient table for auth_user_id (not patient_auth_id)
