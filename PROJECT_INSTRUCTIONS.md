@@ -10,8 +10,8 @@ Ayushpathi: India-based AYUSH (Ayurveda, Yoga, Unani, Siddha, Homeopathy) health
 - **Live URL:** https://www.rasbros.com (Vercel, auto-deploys on push to main)
 - **WhatsApp:** wa.me deep links only — NO third-party API
 
-## Current State — Session 13 Starting Point
-**Last commit:** `52ccbdc` — feat: session 12 — receptionist/admin dashboards, consultation/new, patients/[id]  
+## Current State — Session 14 Starting Point
+**Last commit:** `f489929` — feat: session 13 — receptionist tools + hospital admin info  
 **PAT:** ghp_REDACTED_SEE_COWORK_PROJECT_FOLDER (valid until 31 Jul 2026)  
 **Supabase URL:** https://urrccvyiibqcfqfjgedp.supabase.co  
 **Anon key:** eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVycmNjdnlpaWJxY2ZxZmpnZWRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3ODQ0MTUsImV4cCI6MjA5NzM2MDQxNX0.9QBFB174ZmbmpdnsR8c7pA_ZaE3Xt1bhDBNDbnlSc2s
@@ -135,7 +135,8 @@ patient_2        = e1000000-0000-0000-0000-000000000002  Ananya Krishnan
 patient_3        = e1000000-0000-0000-0000-000000000003  Mohan Pillai
 ```
 
-## What's Built (Sessions 1–12)
+## What's Built (Sessions 1–13)
+✅ **Session 13** — `/receptionist/prescriptions/new` (appointment picker), `/patients/new` (receptionist patient registration + new API), `/results/upload` (test result file upload), `/hospital-admin/info` (scoped hospital info page)
 ✅ **Session 12** — Receptionist dashboard (live appointments + GDPR lookup), Hospital admin dashboard (server-side, scoped stats), `/consultation/new` (doctor picks today's appointment to start), `/patients/[id]` (consent-gated patient detail + history)
 
 ## What's Built (Sessions 1–7)
@@ -188,13 +189,12 @@ patient_3        = e1000000-0000-0000-0000-000000000003  Mohan Pillai
 | dr.padmavathi@demo.ayushpathi.in | Dr. Padmavathi Reddy (AYU) | TE | speaks TE, HI, EN |
 | dr.debabrata@demo.ayushpathi.in | Dr. Debabrata Sen (HOM) | BN | speaks BN, EN, HI |
 
-## What's NOT Built Yet — Session 13 Priorities
+## What's NOT Built Yet — Session 14 Priorities
 1. **SMS/OTP login** — replace email+password with Supabase phone OTP for patients
-2. **Global admin web UI** — `/dashboard/admin` serves all scopes now, but GLOBAL scope needs dedicated platform-wide management: manage hospitals, manage groups, add global admins
+2. **Global admin web UI** — GLOBAL scope needs platform-wide management (manage hospitals, groups, global admins)
 3. **Real WhatsApp numbers** — replace dummy `9194440000xx` before go-live
-4. **Receptionist prescription entry UI** — `/receptionist/prescriptions/new` (quick action on receptionist dash links here — 404)
-5. **Patient registration web page** — `/patients/new` (linked from receptionist dash — needs form)
-6. **Test results upload page** — `/results/upload` (linked from receptionist dash — needs form)
+4. **Appointment booking from receptionist** — `/appointments/new` receptionist flow (book on behalf of patient)
+5. **Doctor availability page from admin** — `/hospital-admin/doctors` verify flow complete but availability management missing
 
 ## API Bugs Fixed (do not re-introduce)
 - `/api/appointments/[id]/cancel` — join patient table for auth_user_id (not patient_auth_id)
