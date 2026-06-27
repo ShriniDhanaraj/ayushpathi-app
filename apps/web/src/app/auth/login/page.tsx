@@ -53,11 +53,28 @@ export default function LoginPage() {
     }
 
     const meta = data.user?.user_metadata ?? {}
-    const role = meta.role ?? 'patient'
+    let role: string = meta.role ?? ''
+
+    // ── Role detection fallback ──────────────────────────────────────────────
+    // Seed / manually-created users never had user_metadata.role set.
+    // Detect role from DB tables and persist it so future logins don't need this.
+    if (!role) {
+      const uid = data.user.id
+      const [{ data: doc }, { data: adm }, { data: rec }] = await Promise.all([
+        supabase.from('doctor').select('id').eq('auth_user_id', uid).maybeSingle(),
+        supabase.from('hospital_admin').select('id').eq('auth_user_id', uid).maybeSingle(),
+        supabase.from('receptionist').select('id').eq('auth_user_id', uid).maybeSingle(),
+      ])
+      if (adm)       role = 'hospital_admin'
+      else if (doc)  role = 'doctor'
+      else if (rec)  role = 'receptionist'
+      else           role = 'patient'
+
+      // Persist so future logins skip this lookup
+      await supabase.auth.updateUser({ data: { role } })
+    }
 
     // Derive ui_language from user metadata (set at registration) or profile
-    // The metadata stores ui_language directly for fast access without an extra DB fetch.
-    // If not present, fetch from patient/doctor table.
     let derivedLang: string = meta.ui_language ?? 'EN'
 
     if (!meta.ui_language && role === 'patient') {
@@ -67,7 +84,7 @@ export default function LoginPage() {
         .eq('auth_user_id', data.user.id)
         .single()
       derivedLang = profile?.ui_language ?? 'EN'
-    } else if (!meta.ui_language && (role === 'doctor-approved' || role === 'doctor-pending' || role === 'doctor')) {
+    } else if (!meta.ui_language && role === 'doctor') {
       const { data: profile } = await supabase
         .from('doctor')
         .select('ui_language')
