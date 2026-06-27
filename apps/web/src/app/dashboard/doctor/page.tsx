@@ -59,9 +59,13 @@ async function getDoctorData(doctorId: string) {
       .limit(5),
   ])
 
-  const teleconsults: TeleconsultAppt[] = (teleconsultsRes.data ?? []).map(a => ({
-    ...a,
-    patient: Array.isArray(a.patient) ? a.patient[0] : a.patient,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const teleconsults: TeleconsultAppt[] = (teleconsultsRes.data ?? [] as any[]).map((a: any) => ({
+    id: a.id,
+    appointment_date: a.appointment_date,
+    start_time: a.start_time,
+    teleconsult_url: a.teleconsult_url ?? null,
+    patient: Array.isArray(a.patient) ? (a.patient[0] ?? null) : (a.patient ?? null),
   }))
 
   return {

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getSupabaseClient } from '@/lib/supabase'
 import SignOutButton from '@/components/auth/SignOutButton'
@@ -42,7 +42,7 @@ function formatTime(t: string) {
   return `${hh > 12 ? hh - 12 : hh || 12}:${m} ${hh >= 12 ? 'PM' : 'AM'}`
 }
 
-export default function PatientDashboard() {
+function PatientDashboardContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [name, setName] = useState('')
@@ -333,5 +333,17 @@ export default function PatientDashboard() {
         </p>
       </main>
     </div>
+  )
+}
+
+export default function PatientDashboard() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-400 text-sm">Loading…</p>
+      </div>
+    }>
+      <PatientDashboardContent />
+    </Suspense>
   )
 }

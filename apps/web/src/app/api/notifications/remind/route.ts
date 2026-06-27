@@ -36,7 +36,8 @@ export async function GET(req: NextRequest) {
   if (!appointments?.length) return NextResponse.json({ sent: 0, message: 'No appointments tomorrow' })
 
   const userIds = new Set<string>()
-  for (const apt of appointments) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const apt of appointments as any[]) {
     const p = Array.isArray(apt.patient) ? apt.patient[0] : apt.patient
     const d = Array.isArray(apt.doctor)  ? apt.doctor[0]  : apt.doctor
     if (p?.auth_user_id) userIds.add(p.auth_user_id)
@@ -61,7 +62,7 @@ export async function GET(req: NextRequest) {
   }
 
   const messages: object[] = []
-  for (const apt of appointments) {
+  for (const apt of appointments as any[]) {
     const p = Array.isArray(apt.patient) ? apt.patient[0] : apt.patient
     const d = Array.isArray(apt.doctor)  ? apt.doctor[0]  : apt.doctor
     const typeLabel = apt.type === 'TELECONSULT' ? 'Video' : 'In-person'
