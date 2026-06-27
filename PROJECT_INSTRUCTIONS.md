@@ -10,8 +10,8 @@ Ayushpathi: India-based AYUSH (Ayurveda, Yoga, Unani, Siddha, Homeopathy) health
 - **Live URL:** https://www.rasbros.com (Vercel, auto-deploys on push to main)
 - **WhatsApp:** wa.me deep links only — NO third-party API
 
-## Current State — Session 14 Starting Point
-**Last commit:** `f489929` — feat: session 13 — receptionist tools + hospital admin info  
+## Current State — Session 15 Starting Point
+**Last commit:** `cdcd37f` — feat: session 14 — mobile nav fix + WhatsApp OTP research  
 **PAT:** ghp_REDACTED_SEE_COWORK_PROJECT_FOLDER (valid until 31 Jul 2026)  
 **Supabase URL:** https://urrccvyiibqcfqfjgedp.supabase.co  
 **Anon key:** eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVycmNjdnlpaWJxY2ZxZmpnZWRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3ODQ0MTUsImV4cCI6MjA5NzM2MDQxNX0.9QBFB174ZmbmpdnsR8c7pA_ZaE3Xt1bhDBNDbnlSc2s
@@ -135,7 +135,8 @@ patient_2        = e1000000-0000-0000-0000-000000000002  Ananya Krishnan
 patient_3        = e1000000-0000-0000-0000-000000000003  Mohan Pillai
 ```
 
-## What's Built (Sessions 1–13)
+## What's Built (Sessions 1–14)
+✅ **Session 14** — Mobile Quick Access nav fix (Prescriptions & Consultations + My Doctors buttons now functional), WhatsApp OTP research doc (`docs/whatsapp-otp-research.md`) — recommends MSG91 + Supabase Send SMS Hook; decision checklist included
 ✅ **Session 13** — `/receptionist/prescriptions/new` (appointment picker), `/patients/new` (receptionist patient registration + new API), `/results/upload` (test result file upload), `/hospital-admin/info` (scoped hospital info page)
 ✅ **Session 12** — Receptionist dashboard (live appointments + GDPR lookup), Hospital admin dashboard (server-side, scoped stats), `/consultation/new` (doctor picks today's appointment to start), `/patients/[id]` (consent-gated patient detail + history)
 
@@ -189,12 +190,12 @@ patient_3        = e1000000-0000-0000-0000-000000000003  Mohan Pillai
 | dr.padmavathi@demo.ayushpathi.in | Dr. Padmavathi Reddy (AYU) | TE | speaks TE, HI, EN |
 | dr.debabrata@demo.ayushpathi.in | Dr. Debabrata Sen (HOM) | BN | speaks BN, EN, HI |
 
-## What's NOT Built Yet — Session 14 Priorities
-1. **SMS/OTP login** — replace email+password with Supabase phone OTP for patients
-2. **Global admin web UI** — GLOBAL scope needs platform-wide management (manage hospitals, groups, global admins)
-3. **Real WhatsApp numbers** — replace dummy `9194440000xx` before go-live
-4. **Appointment booking from receptionist** — `/appointments/new` receptionist flow (book on behalf of patient)
-5. **Doctor availability page from admin** — `/hospital-admin/doctors` verify flow complete but availability management missing
+## What's NOT Built Yet — Session 15 Priorities
+1. **WhatsApp OTP login** (DECIDED — research done, `docs/whatsapp-otp-research.md`) — use MSG91 + Supabase Send SMS Hook; needs MSG91 account, Meta template approval, Edge Function + mobile login rewrite
+2. **Receptionist appointment booking** — `/appointments/new` receptionist flow (book on behalf of patient via GDPR lookup → doctor/slot selection)
+3. **Admin-scoped appointments view** — `/appointments/today` is doctor-scoped; admin should see all hospital appointments
+4. **Global admin web UI** — GLOBAL scope needs platform-wide management (manage hospitals, groups, global admins)
+5. **Real WhatsApp numbers** — replace dummy `9194440000xx` before go-live
 
 ## API Bugs Fixed (do not re-introduce)
 - `/api/appointments/[id]/cancel` — join patient table for auth_user_id (not patient_auth_id)
