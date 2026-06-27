@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { LANGUAGES } from '@ayushpathi/shared/constants/languages'
+import { LANGUAGES } from '@/lib/shared/languages'
 
 const SPEC = [
   { code: '', label: 'All AYUSH' }, { code: 'AYU', label: 'Ayurveda' },

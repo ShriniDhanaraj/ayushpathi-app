@@ -4,8 +4,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabaseClient, resetSupabaseClient } from '@/lib/supabase'
 import { ROLE_DASHBOARD } from '@/lib/auth'
-import { LANGUAGES } from '@ayushpathi/shared/constants/languages'
-import { getTranslations } from '@ayushpathi/shared/i18n/translations'
+import { LANGUAGES } from '@/lib/shared/languages'
+import { getTranslations } from '@/lib/shared/translations'
 
 const FRIENDLY_ERRORS: Record<string, string> = {
   'Invalid login credentials': 'Incorrect email or password. Please try again.',

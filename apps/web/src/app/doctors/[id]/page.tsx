@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { LANGUAGES } from '@ayushpathi/shared/constants/languages'
+import { LANGUAGES } from '@/lib/shared/languages'
 
 const SPEC_LABELS: Record<string, string> = {
   AYU: 'Ayurveda', YOG: 'Yoga & Naturopathy',

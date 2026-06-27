@@ -2,8 +2,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getSupabaseClient } from '@/lib/supabase'
-import { LANGUAGES, PRIMARY_LANGUAGE_CODES } from '@ayushpathi/shared/constants/languages'
-import { getTranslations } from '@ayushpathi/shared/i18n/translations'
+import { LANGUAGES, PRIMARY_LANGUAGE_CODES } from '@/lib/shared/languages'
+import { getTranslations } from '@/lib/shared/translations'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const SPECIALIZATIONS = [
