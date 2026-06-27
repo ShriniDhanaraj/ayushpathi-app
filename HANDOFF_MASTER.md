@@ -14,7 +14,7 @@
 | **Supabase URL** | https://urrccvyiibqcfqfjgedp.supabase.co |
 | **Supabase Anon Key** | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVycmNjdnlpaWJxY2ZxZmpnZWRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3ODQ0MTUsImV4cCI6MjA5NzM2MDQxNX0.9QBFB174ZmbmpdnsR8c7pA_ZaE3Xt1bhDBNDbnlSc2s` |
 | **PAT** | ghp_REDACTED_SEE_COWORK_PROJECT_FOLDER (valid until 31 Jul 2026) |
-| **Last Commit** | `296d316` — feat: session 15 — receptionist GDPR booking flow + admin scoped appointments |
+| **Last Commit** | `ee24fc3` — feat: session 15 — WhatsApp OTP patient login |
 | **Platform WhatsApp** | `919361287432` |
 | **Default password** | `Ayush@2026!` (all test users + receptionist-registered patients) |
 
@@ -238,12 +238,16 @@ patient_3        = e1000000-0000-0000-0000-000000000003  Mohan Pillai
 - **Seeds applied:** `003_rich_patient_history.sql` (Ravi/Ananya/Mohan rich consent history) + `004_mydoctors_test_scenarios.sql` (Mohan 2nd ACTIVE doctor with partial history)
 - **WhatsApp OTP research** (`docs/whatsapp-otp-research.md`): recommends MSG91 + Supabase Send SMS Hook. ₹0.20/OTP, ~₹2,500/month for 10k OTPs. Architecture documented. Decisions needed before build (see below)
 
-### Session 15: Receptionist GDPR Booking + Admin Appointments View (commit `296d316`)
+### Session 15: WhatsApp OTP Login + Receptionist GDPR Booking + Admin Appointments (commits `296d316`, `ee24fc3`)
 - **NEW `GET /api/receptionist/hospital-doctors`** — returns APPROVED doctors from `hospital_doctor` junction for the calling receptionist's hospital; requires Bearer token
 - **REWRITE `/receptionist/book`** — full 5-step wizard: (1) GDPR patient search via `/api/receptionist/identify` with Bearer token, (2) address confirmation via `/api/receptionist/identify/confirm`, (3) hospital-scoped doctor selection, (4) date + availability slot picker (same slot generator as patient booking), (5) walk-in flag + notes + type → `POST /api/receptionist/appointments` with `booked_by_role='RECEPTIONIST'` and `hospital_id`
 - **NEW `/hospital-admin/appointments`** — server component admin appointments view; all 3 scopes work: HOSPITAL sees own hospital, GROUP sees all group hospitals, GLOBAL sees all. Includes date picker, status count pills, hospital column for GROUP/GLOBAL, walk-in + teleconsult badges, booked-by-receptionist tag
 - **FIX `/dashboard/admin`** quick link: "Today's appointments" now → `/hospital-admin/appointments` (was incorrectly linking to doctor-scoped `/appointments/today`)
 - **FIX `/dashboard/receptionist`** quick link: "Book appointment" now → `/receptionist/book` (GDPR flow)
+- **NEW `supabase/functions/send-otp-whatsapp/index.ts`** — Supabase Auth "Send SMS" hook; looks up `patient.ui_language` by `user_id`, sends per-language OTP via MSG91 WhatsApp from `919361287432`; 9 language message bodies (EN/HI/TA/TE/KN/ML/BN/GU/MR); email fallback via Resend if WA fails + patient has email; always returns `{}` so Supabase never blocks auth on delivery failure
+- **REWRITE `apps/mobile/app/(auth)/login.tsx`** — two modes: Patient mode (default, phone+OTP via `signInWithOtp`/`verifyOtp`), Staff mode (toggle, email+password for doctors/receptionists/admins); 60-second resend timer; Change number escape hatch; UI strings in all 9 languages; language preference persisted to AsyncStorage on success
+- **NEW `supabase/migrations/20260627_otp_phone_auth.sql`** — activation checklist: enable Phone Auth, deploy function, register hook, set MSG91/Resend secrets, Meta template approval steps; 9 template secret names `MSG91_WA_TEMPLATE_ID_EN`..`_MR`
+- **Decisions:** WA number = `919361287432`, Fallback = email (if shared), Language = per `ui_language`
 
 ---
 
@@ -291,7 +295,7 @@ Full analysis: `docs/whatsapp-otp-research.md`
 
 ## What's NOT Built Yet — Session 16 Priorities
 
-1. **WhatsApp OTP patient login** — research done (`docs/whatsapp-otp-research.md`), 3 decisions still needed from Shri Raj (see WhatsApp OTP section above). Build: MSG91 account → Supabase Edge Function `send-otp-whatsapp` → Auth hook config → mobile login screen rewrite (phone + OTP, patients only)
+1. **Activate WhatsApp OTP** (Shri Raj action required) — code is built; need: (a) MSG91 account + `919361287432` registered as WA Business number, (b) 9 Meta-approved OTP templates, (c) set secrets in Supabase, (d) enable Phone Auth + register Send SMS hook, (e) deploy edge function. Full checklist in `supabase/migrations/20260627_otp_phone_auth.sql`.
 
 2. **Global admin web UI** — GLOBAL scope needs platform-wide management (hospitals, groups, global admins)
 
