@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   const { data: tokens } = await supabase
     .from('device_push_token')
     .select('user_id, token')
-    .in('user_id', [...userIds])
+    .in('user_id', Array.from(userIds))
 
   const tokenMap: Record<string, string[]> = {}
   for (const t of tokens ?? []) {
