@@ -14,7 +14,7 @@
 | **Supabase URL** | https://urrccvyiibqcfqfjgedp.supabase.co |
 | **Supabase Anon Key** | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVycmNjdnlpaWJxY2ZxZmpnZWRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3ODQ0MTUsImV4cCI6MjA5NzM2MDQxNX0.9QBFB174ZmbmpdnsR8c7pA_ZaE3Xt1bhDBNDbnlSc2s` |
 | **PAT** | ghp_REDACTED_SEE_COWORK_PROJECT_FOLDER (valid until 31 Jul 2026) |
-| **Last Commit** | `ee24fc3` — feat: session 15 — WhatsApp OTP patient login |
+| **Last Commit** | `TBD` — seed: S16 doctor dashboard rich test data (005) |
 | **Platform WhatsApp** | `919361287432` |
 | **Default password** | `Ayush@2026!` (all test users + receptionist-registered patients) |
 
@@ -293,6 +293,16 @@ Full analysis: `docs/whatsapp-otp-research.md`
 
 ---
 
+### Session 16: Doctor Dashboard Rich Test Data (seed 005)
+- **NEW `supabase/seeds/005_doctor_rich_history.sql`** — fixes "0 records" for both doctor accounts. Adds:
+  - 4 new `patient_doctor_consent` rows: Ananya Krishnan + Mohan Pillai → Dr. Priya Nair (ACTIVE); Ananya Krishnan + Mohan Pillai → Dr. Arjun Sharma (ACTIVE). Previously only Ravi Kumar had ACTIVE consent with Dr. Priya; Dr. Arjun had zero active patients.
+  - 17 new appointments: 3 today (Dr. Priya) + 4 today (Dr. Arjun, incl. existing) + upcoming for both + COMPLETED history + 1 CANCELLED + 1 NO_SHOW
+  - 8 consultations (for all COMPLETED past appointments) with realistic AYUSH clinical notes
+  - 8 prescriptions (mix DOCTOR_DIRECT + RECEPTIONIST entry, all verified) — HOM medicines for Dr. Priya (Calc Fluor, Rhus Tox, Natrum Mur, Arsenicum Album, Ledum Pal), AYU medicines for Dr. Arjun (Vasa Avaleha, Maharasnadi Kwath, Shallaki, Sitopaladi Churna)
+- **Test cases: "Doctor Dashboard — S16"** (DD-01..12) — login, today's queue, upcoming, active patients, consultation history, prescription detail, CANCELLED/NO_SHOW display, stat cards
+
+---
+
 ## What's NOT Built Yet — Session 16 Priorities
 
 1. **Activate WhatsApp OTP** (Shri Raj action required) — code is built; need: (a) MSG91 account + `919361287432` registered as WA Business number, (b) 9 Meta-approved OTP templates, (c) set secrets in Supabase, (d) enable Phone Auth + register Send SMS hook, (e) deploy edge function. Full checklist in `supabase/migrations/20260627_otp_phone_auth.sql`.
@@ -312,6 +322,7 @@ Full analysis: `docs/whatsapp-otp-research.md`
 | `docs/mydoctors-test-scenarios.md` | My Doctors screen detailed test matrix + SQL reset script |
 | `supabase/seeds/003_rich_patient_history.sql` | Rich consent + Rx history for Ravi/Ananya/Mohan |
 | `supabase/seeds/004_mydoctors_test_scenarios.sql` | Edge-case consents for My Doctors testing |
+| `supabase/seeds/005_doctor_rich_history.sql` | Rich test data for doctor_h01 + doctor_h02 — fixes "0 records" on all doctor dashboard buttons |
 
 ---
 
