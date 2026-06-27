@@ -1,0 +1,64 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Session 15: WhatsApp OTP Auth — Supabase Configuration Notes
+-- No schema changes required. Supabase Auth handles phone OTP natively.
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- STEPS TO ACTIVATE (Supabase Dashboard):
+--
+-- 1. Enable Phone Auth:
+--    Authentication → Providers → Phone → Enable
+--    Set "OTP Expiry" to 600 (10 minutes)
+--    Uncheck "Enable phone confirmations" if you want login-only (not signup)
+--
+-- 2. Deploy the Edge Function:
+--    supabase functions deploy send-otp-whatsapp --no-verify-jwt
+--    (file: supabase/functions/send-otp-whatsapp/index.ts)
+--
+-- 3. Register as Send SMS Hook:
+--    Authentication → Hooks → Send SMS Hook → Edge Function
+--    Select: send-otp-whatsapp
+--
+-- 4. Set Edge Function Secrets:
+--    supabase secrets set MSG91_AUTH_KEY="your_msg91_key"
+--    supabase secrets set MSG91_WA_SENDER="919361287432"
+--    supabase secrets set MSG91_WA_TEMPLATE_ID_EN="ayushpathi_otp_en"
+--    supabase secrets set MSG91_WA_TEMPLATE_ID_HI="ayushpathi_otp_hi"
+--    supabase secrets set MSG91_WA_TEMPLATE_ID_TA="ayushpathi_otp_ta"
+--    supabase secrets set MSG91_WA_TEMPLATE_ID_TE="ayushpathi_otp_te"
+--    supabase secrets set MSG91_WA_TEMPLATE_ID_KN="ayushpathi_otp_kn"
+--    supabase secrets set MSG91_WA_TEMPLATE_ID_ML="ayushpathi_otp_ml"
+--    supabase secrets set MSG91_WA_TEMPLATE_ID_BN="ayushpathi_otp_bn"
+--    supabase secrets set MSG91_WA_TEMPLATE_ID_GU="ayushpathi_otp_gu"
+--    supabase secrets set MSG91_WA_TEMPLATE_ID_MR="ayushpathi_otp_mr"
+--    supabase secrets set RESEND_API_KEY="re_..."   -- optional email fallback
+--
+-- 5. MSG91 / Meta setup (Shri Raj must do manually):
+--    a. Create MSG91 account at msg91.com
+--    b. Register WhatsApp Business number 919361287432 with Meta
+--    c. Create and submit OTP template per language for Meta approval
+--       Template example (EN): "Your Ayushpathi verification code is {{1}}. Valid for 10 minutes."
+--    d. Copy template names into secrets above
+--
+-- 6. Test:
+--    Use patient01@gmail.com mobile (from seed) to trigger phone OTP
+--    Or add a real mobile number to a test patient record
+--
+-- PATIENT LOGIN FLOW (mobile app):
+--    Patient enters 10-digit mobile → app calls signInWithOtp({ phone: '+91XXXXXXXXXX' })
+--    Supabase triggers send-otp-whatsapp hook → MSG91 WhatsApp → patient receives OTP
+--    Patient enters OTP → app calls verifyOtp({ phone, token, type: 'sms' })
+--    Session created → _layout.tsx routes to /(tabs)/
+--
+-- STAFF (doctors/receptionists/admins) use email+password — unchanged.
+-- The mobile login screen shows "Staff login" toggle to switch modes.
+--
+-- EMAIL FALLBACK:
+--    If MSG91 WhatsApp delivery fails AND patient has email in patient.email column,
+--    the edge function sends OTP via Resend API (configure RESEND_API_KEY secret).
+--    If RESEND_API_KEY is not set, fallback is silently skipped.
+--    Patient sees a 60-second resend timer in the app.
+--
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- No SQL changes — this is documentation only.
+SELECT 1; -- placeholder so migration is valid SQL
