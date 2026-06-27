@@ -200,7 +200,7 @@ export default async function AdminDashboard() {
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Quick links</h3>
               {[
                 { label: '👨‍⚕️ Verify doctors',       href: '/hospital-admin/doctors?status=PENDING' },
-                { label: '📅 Today\'s appointments', href: '/appointments/today' },
+                { label: '📅 Today\'s appointments', href: '/hospital-admin/appointments' },
                 { label: '🏥 Hospital info',          href: '/hospital-admin/info' },
                 { label: '👤 Receptionists',          href: '/hospital-admin/receptionists' },
               ].map(item => (

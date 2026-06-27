@@ -175,7 +175,7 @@ export default async function ReceptionistDashboard() {
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Quick actions</h3>
               {[
                 { label: '➕ Register new patient', href: '/patients/new' },
-                { label: '📅 Book appointment',     href: '/appointments/new' },
+                { label: '📅 Book appointment',     href: '/receptionist/book' },
                 { label: '💊 Enter prescription',   href: '/receptionist/prescriptions/new' },
                 { label: '📎 Attach test results',  href: '/results/upload' },
               ].map(item => (
