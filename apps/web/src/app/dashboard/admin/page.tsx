@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { getSupabaseClient } from '@/lib/supabase'
+import SignOutButton from '@/components/auth/SignOutButton'
 
 interface PendingDoctor { id: string; first_name: string; last_name: string; ayush_specialization: string; created_at: string }
 
@@ -39,7 +40,7 @@ export default function AdminDashboard() {
           <h1 className="text-xl font-bold text-gray-900">Ayushpathi Admin</h1>
           <p className="text-sm text-gray-500 mt-0.5">Platform management</p>
         </div>
-        <a href="/api/auth/signout" className="text-sm text-gray-400 hover:text-gray-600">Sign out</a>
+        <SignOutButton className="text-sm text-gray-400 hover:text-gray-600" />
       </header>
 
       <main className="max-w-5xl mx-auto p-6 space-y-6">

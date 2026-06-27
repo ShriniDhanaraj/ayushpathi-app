@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getSupabaseClient } from '@/lib/supabase'
+import SignOutButton from '@/components/auth/SignOutButton'
 
 interface Appointment {
   id: string
@@ -133,7 +134,7 @@ export default function PatientDashboard() {
           </h1>
           <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Ayushpathi Patient Portal</p>
         </div>
-        <a href="/api/auth/signout" className="text-sm text-gray-400 hover:text-gray-600">Sign out</a>
+        <SignOutButton className="text-sm text-gray-400 hover:text-gray-600" />
       </header>
 
       <main className="max-w-4xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">

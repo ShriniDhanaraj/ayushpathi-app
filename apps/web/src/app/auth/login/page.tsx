@@ -1,8 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getSupabaseClient } from '@/lib/supabase'
+import { getSupabaseClient, resetSupabaseClient } from '@/lib/supabase'
 import { ROLE_DASHBOARD } from '@/lib/auth'
 import { LANGUAGES } from '@ayushpathi/shared/constants/languages'
 import { getTranslations } from '@ayushpathi/shared/i18n/translations'
@@ -22,6 +22,20 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   // UI language on the login page (pre-login, defaults to EN)
   const [uiLang, setUiLang] = useState('EN')
+
+  // Flush any lingering session from a previous user on every visit to this page.
+  // Without this, the Supabase browser client reads the old token from localStorage
+  // and signs in automatically as the previous user.
+  useEffect(() => {
+    const supabase = getSupabaseClient()
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        supabase.auth.signOut({ scope: 'local' }).then(() => {
+          resetSupabaseClient()
+        })
+      }
+    })
+  }, [])
 
   const T = getTranslations(uiLang)
 

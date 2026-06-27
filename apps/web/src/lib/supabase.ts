@@ -9,7 +9,17 @@ export function createSupabaseClient() {
 
 // Singleton for use in client components
 let client: ReturnType<typeof createSupabaseClient> | null = null
+
 export function getSupabaseClient() {
   if (!client) client = createSupabaseClient()
   return client
+}
+
+/**
+ * Call this after signOut() to drop the in-memory singleton.
+ * Next call to getSupabaseClient() will create a fresh instance
+ * with no cached session.
+ */
+export function resetSupabaseClient() {
+  client = null
 }
