@@ -101,7 +101,8 @@ export default async function DoctorProfilePage() {
             </div>
             <div className="divide-y">
               {hospitals.map((h, i) => {
-                const hosp = h.hospital as { id: string; name: string; phone: string } | null
+                const hospRaw = h.hospital
+                const hosp = (Array.isArray(hospRaw) ? (hospRaw[0] ?? null) : hospRaw) as { id: string; name: string; phone: string } | null
                 return hosp ? (
                   <div key={i} className="px-5 py-3.5 flex items-center justify-between">
                     <div>
