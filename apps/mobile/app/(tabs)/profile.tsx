@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native'
-import { useFocusEffect } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 
@@ -31,6 +31,7 @@ interface PatientProfile {
 }
 
 export default function ProfileScreen() {
+  const router = useRouter()
   const [profile, setProfile] = useState<PatientProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -96,8 +97,7 @@ export default function ProfileScreen() {
 
   async function savePersonal() {
     if (!editFirstName || !editLastName) { setError('First and last name are required.'); return }
-    setSaving(true)
-    setError('')
+    setSaving(true); setError('')
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not logged in')
@@ -106,10 +106,8 @@ export default function ProfileScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           auth_user_id: user.id,
-          first_name: editFirstName,
-          last_name: editLastName,
-          date_of_birth: editDob || undefined,
-          gender: editGender || undefined,
+          first_name: editFirstName, last_name: editLastName,
+          date_of_birth: editDob || undefined, gender: editGender || undefined,
           mobile: editMobile || undefined,
         }),
       })
@@ -118,17 +116,14 @@ export default function ProfileScreen() {
       setEditing(null)
       await load()
       Alert.alert('Saved', 'Personal information updated.')
-    } catch (e: any) {
-      setError(e.message ?? 'Something went wrong.')
-    } finally {
-      setSaving(false)
-    }
+    } catch (e: unknown) {
+      setError((e as Error).message ?? 'Something went wrong.')
+    } finally { setSaving(false) }
   }
 
   async function saveAddress() {
     if (!editCity || !editState) { setError('City and state are required.'); return }
-    setSaving(true)
-    setError('')
+    setSaving(true); setError('')
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not logged in')
@@ -137,12 +132,9 @@ export default function ProfileScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           auth_user_id: user.id,
-          door_number: editDoor || undefined,
-          street: editStreet || undefined,
-          area: editArea || undefined,
-          city: editCity,
-          district: editDistrict || undefined,
-          state: editState,
+          door_number: editDoor || undefined, street: editStreet || undefined,
+          area: editArea || undefined, city: editCity,
+          district: editDistrict || undefined, state: editState,
           pincode: editPincode || undefined,
         }),
       })
@@ -151,11 +143,9 @@ export default function ProfileScreen() {
       setEditing(null)
       await load()
       Alert.alert('Saved', 'Address updated.')
-    } catch (e: any) {
-      setError(e.message ?? 'Something went wrong.')
-    } finally {
-      setSaving(false)
-    }
+    } catch (e: unknown) {
+      setError((e as Error).message ?? 'Something went wrong.')
+    } finally { setSaving(false) }
   }
 
   async function handleSignOut() {
@@ -206,6 +196,41 @@ export default function ProfileScreen() {
           <ActivityIndicator color="#1a6b3a" style={{ marginTop: 40 }} />
         ) : (
           <>
+            {/* ── Quick Access ── */}
+            <View style={styles.section}>
+              <TouchableOpacity
+                style={styles.navRow}
+                onPress={() => router.push('/(tabs)/records')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.navIcon}>
+                  <Text style={styles.navEmoji}>💊</Text>
+                </View>
+                <View style={styles.navContent}>
+                  <Text style={styles.navTitle}>Prescriptions & Consultations</Text>
+                  <Text style={styles.navSub}>View your health records</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#c0c0c0" />
+              </TouchableOpacity>
+
+              <View style={styles.navDivider} />
+
+              <TouchableOpacity
+                style={styles.navRow}
+                onPress={() => router.push('/(tabs)/doctors')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.navIcon}>
+                  <Text style={styles.navEmoji}>👨‍⚕️</Text>
+                </View>
+                <View style={styles.navContent}>
+                  <Text style={styles.navTitle}>My Doctors</Text>
+                  <Text style={styles.navSub}>Manage doctor access & consent</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#c0c0c0" />
+              </TouchableOpacity>
+            </View>
+
             {/* ── Personal Information ── */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -357,6 +382,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff', marginHorizontal: 16, marginTop: 16,
     borderRadius: 14, borderWidth: 1, borderColor: '#d0e8da', overflow: 'hidden',
   },
+  // ── Quick nav rows ──
+  navRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 14, gap: 12,
+  },
+  navIcon: {
+    width: 40, height: 40, borderRadius: 10,
+    backgroundColor: '#f0f7f4',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  navEmoji: { fontSize: 20 },
+  navContent: { flex: 1 },
+  navTitle: { fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
+  navSub: { fontSize: 12, color: '#888', marginTop: 2 },
+  navDivider: { height: 1, backgroundColor: '#f0f7f4', marginLeft: 68 },
+  // ── Existing styles ──
   sectionHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 14,
