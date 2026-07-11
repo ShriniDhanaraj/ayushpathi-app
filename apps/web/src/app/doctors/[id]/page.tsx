@@ -1,12 +1,13 @@
-'use client'
-import { useState, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import type { Metadata } from 'next'
+import Link from 'next/link'
+import { cache } from 'react'
+import { getDoctorProfile, SPEC_LABELS } from '@/lib/doctor-profile'
 import { LANGUAGES } from '@/lib/shared/languages'
 
-const SPEC_LABELS: Record<string, string> = {
-  AYU: 'Ayurveda', YOG: 'Yoga & Naturopathy',
-  UNA: 'Unani', SID: 'Siddha', HOM: 'Homeopathy',
-}
+// Re-render at most every 5 minutes — keeps profiles fresh and crawlable
+export const revalidate = 300
+
+const getProfile = cache(getDoctorProfile)
 
 const DAY_ORDER = ['MON','TUE','WED','THU','FRI','SAT','SUN']
 const DAY_LABELS: Record<string, string> = {
@@ -14,54 +15,44 @@ const DAY_LABELS: Record<string, string> = {
   THU: 'Thursday', FRI: 'Friday', SAT: 'Saturday', SUN: 'Sunday',
 }
 
-interface DoctorProfile {
-  id: string
-  first_name: string
-  last_name: string
-  ayush_specialization: string
-  years_of_experience: number
-  degrees: string[]
-  registration_number: string
-  registration_council: string
-  languages_spoken: string[]
-  teleconsult_enabled: boolean
-  teleconsult_fee: number
-  address: { city: string; district: string; state: string } | null
-  hospitals: Array<{ id: string; name: string; city?: { city: string } }>
-  availability: Array<{ day_of_week: string; start_time: string; end_time: string; slot_duration: number }>
+export async function generateMetadata(
+  { params }: { params: { id: string } }
+): Promise<Metadata> {
+  const doctor = await getProfile(params.id)
+  if (!doctor) return { title: 'Doctor not found' }
+
+  const spec = SPEC_LABELS[doctor.ayush_specialization] ?? doctor.ayush_specialization
+  const city = doctor.address?.city
+  const title = `Dr. ${doctor.first_name} ${doctor.last_name} — ${spec}${city ? ` in ${city}` : ''}`
+  const langs = (doctor.languages_spoken ?? [])
+    .map(code => LANGUAGES.find(l => l.code === code)?.label ?? code)
+    .join(', ')
+  const description =
+    `Book an appointment with Dr. ${doctor.first_name} ${doctor.last_name}, ` +
+    `${spec} practitioner with ${doctor.years_of_experience} years of experience` +
+    `${city ? ` in ${city}, ${doctor.address?.state}` : ''}.` +
+    `${langs ? ` Speaks ${langs}.` : ''}` +
+    `${doctor.teleconsult_enabled ? ' Video consultation available.' : ''}`
+
+  return {
+    title,
+    description,
+    openGraph: { title, description },
+    alternates: { canonical: `/doctors/${doctor.id}` },
+  }
 }
 
-export default function DoctorProfilePage() {
-  const { id } = useParams<{ id: string }>()
-  const [doctor, setDoctor] = useState<DoctorProfile | null>(null)
-  const [status, setStatus] = useState<'loading' | 'done' | 'error'>('loading')
+export default async function DoctorProfilePage(
+  { params }: { params: { id: string } }
+) {
+  const doctor = await getProfile(params.id)
 
-  useEffect(() => {
-    if (!id) return
-    fetch(`/api/doctors/${id}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) { setStatus('error'); return }
-        setDoctor(data.doctor)
-        setStatus('done')
-      })
-      .catch(() => setStatus('error'))
-  }, [id])
-
-  if (status === 'loading') {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-400 text-sm">Loading doctor profile…</p>
-      </div>
-    )
-  }
-
-  if (status === 'error' || !doctor) {
+  if (!doctor) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center space-y-2">
           <p className="text-gray-900 font-medium">Doctor not found</p>
-          <a href="/doctors" className="text-brand-600 text-sm hover:underline">← Browse doctors</a>
+          <Link href="/doctors" className="text-brand-600 text-sm hover:underline">← Browse doctors</Link>
         </div>
       </div>
     )
@@ -74,7 +65,7 @@ export default function DoctorProfilePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b px-6 py-4 flex items-center gap-3">
-        <a href="/doctors" className="text-gray-400 hover:text-gray-600 text-sm">← Doctors</a>
+        <Link href="/doctors" className="text-gray-400 hover:text-gray-600 text-sm">← Doctors</Link>
         <span className="font-semibold text-gray-900">Doctor Profile</span>
       </header>
 
@@ -83,7 +74,6 @@ export default function DoctorProfilePage() {
         {/* Hero card */}
         <div className="card p-6">
           <div className="flex items-start gap-4">
-            {/* Avatar */}
             <div className="w-16 h-16 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
               <span className="text-brand-700 font-bold text-xl">
                 {doctor.first_name[0]}{doctor.last_name[0]}
@@ -118,12 +108,12 @@ export default function DoctorProfilePage() {
           </div>
 
           {/* Book button */}
-          <a
+          <Link
             href={`/appointments/new?doctor=${doctor.id}`}
             className="btn-primary w-full text-center mt-5 block"
           >
             Book Appointment
-          </a>
+          </Link>
         </div>
 
         {/* Languages */}
@@ -166,12 +156,12 @@ export default function DoctorProfilePage() {
           <div className="card p-5">
             <h2 className="text-sm font-semibold text-gray-700 mb-3">Practises at</h2>
             <div className="space-y-2">
-              {doctor.hospitals.map((h: DoctorProfile['hospitals'][0]) => (
+              {doctor.hospitals.map(h => (
                 <div key={h.id} className="flex items-center gap-3">
                   <span className="text-lg">🏥</span>
                   <div>
                     <p className="text-sm font-medium text-gray-800">{h.name}</p>
-                    {h.city && <p className="text-xs text-gray-400">{(h.city as { city: string }).city}</p>}
+                    {h.city && <p className="text-xs text-gray-400">{h.city.city}</p>}
                   </div>
                 </div>
               ))}

@@ -212,6 +212,8 @@ export default function LoginPage() {
 
         <p className="text-center text-xs text-gray-400 mt-6">
           By signing in, you agree to our{' '}
+          <Link href="/terms" className="underline">Terms of Service</Link>
+          {' '}and{' '}
           <Link href="/privacy" className="underline">Privacy Policy</Link>
           {' '}— your data is stored securely in India per DPDP Act 2023.
         </p>

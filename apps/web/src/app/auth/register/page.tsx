@@ -65,6 +65,13 @@ export default function RegisterPage() {
         <p className="text-center text-xs text-gray-400 mt-4">
           Hospital / Receptionist accounts are created by your Hospital Admin.
         </p>
+
+        <p className="text-center text-xs text-gray-400 mt-4">
+          By creating an account you agree to our{' '}
+          <Link href="/terms" className="underline">Terms of Service</Link>
+          {' '}and{' '}
+          <Link href="/privacy" className="underline">Privacy Policy</Link>.
+        </p>
       </div>
     </div>
   )

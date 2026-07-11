@@ -74,9 +74,16 @@ export default function Home() {
         </div>
       </div>
 
-      <p className="text-center text-xs text-gray-400 py-6">
-        AYUSH · Ayurveda · Yoga &amp; Naturopathy · Unani · Siddha · Homeopathy
-      </p>
+      <footer className="py-6 text-center space-y-2">
+        <p className="text-xs text-gray-400">
+          AYUSH · Ayurveda · Yoga &amp; Naturopathy · Unani · Siddha · Homeopathy
+        </p>
+        <p className="text-xs text-gray-400">
+          <Link href="/privacy" className="hover:text-gray-600 underline">Privacy Policy</Link>
+          {' · '}
+          <Link href="/terms" className="hover:text-gray-600 underline">Terms of Service</Link>
+        </p>
+      </footer>
     </div>
   )
 }
