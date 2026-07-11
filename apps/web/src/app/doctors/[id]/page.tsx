@@ -24,9 +24,9 @@ export async function generateMetadata(
   const spec = SPEC_LABELS[doctor.ayush_specialization] ?? doctor.ayush_specialization
   const city = doctor.address?.city
   const title = `Dr. ${doctor.first_name} ${doctor.last_name} — ${spec}${city ? ` in ${city}` : ''}`
-  const langs = (doctor.languages_spoken ?? [])
-    .map(code => LANGUAGES.find(l => l.code === code)?.label ?? code)
-    .join(', ')
+  const langs = Array.from(new Set(
+    (doctor.languages_spoken ?? []).map(code => LANGUAGES.find(l => l.code === code)?.label ?? code)
+  )).join(', ')
   const description =
     `Book an appointment with Dr. ${doctor.first_name} ${doctor.last_name}, ` +
     `${spec} practitioner with ${doctor.years_of_experience} years of experience` +
