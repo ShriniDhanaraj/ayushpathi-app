@@ -214,6 +214,12 @@ export default function PatientRegisterForm({ onBack }: { onBack: () => void }) 
       data: { profile_id: result.patient_id, ui_language: form.ui_language },
     })
 
+    // Guest flows (e.g. booking) pass ?redirect= — return the new patient there
+    const r = new URLSearchParams(window.location.search).get('redirect') ?? ''
+    if (r.startsWith('/') && !r.startsWith('//')) {
+      router.push(r)
+      return
+    }
     router.push('/dashboard/patient?welcome=1')
   }
 

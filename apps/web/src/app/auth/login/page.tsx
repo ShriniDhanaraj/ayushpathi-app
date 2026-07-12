@@ -22,6 +22,15 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   // UI language on the login page (pre-login, defaults to EN)
   const [uiLang, setUiLang] = useState('EN')
+  // Optional ?redirect= back-link (e.g. guest booking flow). Read from
+  // window.location to avoid a useSearchParams/Suspense boundary.
+  const [redirectTo, setRedirectTo] = useState('')
+
+  useEffect(() => {
+    const r = new URLSearchParams(window.location.search).get('redirect') ?? ''
+    // Only allow internal paths — never external URLs
+    if (r.startsWith('/') && !r.startsWith('//')) setRedirectTo(r)
+  }, [])
 
   // Flush any lingering session from a previous user on every visit to this page.
   // Without this, the Supabase browser client reads the old token from localStorage
@@ -99,6 +108,12 @@ export default function LoginPage() {
       sessionStorage.setItem('ayushpathi_ui_lang', derivedLang)
     }
 
+    // Guest flows (e.g. booking) pass ?redirect= — honour it for patients only;
+    // staff always land on their role dashboard.
+    if (redirectTo && role === 'patient') {
+      router.push(redirectTo)
+      return
+    }
     router.push(ROLE_DASHBOARD[role as keyof typeof ROLE_DASHBOARD] ?? '/dashboard/patient')
   }
 
@@ -204,7 +219,10 @@ export default function LoginPage() {
 
           <div className="mt-6 text-center text-sm text-gray-500">
             {T.noAccount}{' '}
-            <Link href="/auth/register" className="text-brand-600 font-medium hover:underline">
+            <Link
+              href={redirectTo ? `/auth/register?redirect=${encodeURIComponent(redirectTo)}` : '/auth/register'}
+              className="text-brand-600 font-medium hover:underline"
+            >
               {T.createAccount}
             </Link>
           </div>

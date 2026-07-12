@@ -2,6 +2,14 @@
 import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getSupabaseClient } from '@/lib/supabase'
+import { LANGUAGES } from '@/lib/shared/languages'
+
+// languages_spoken may mix 2-letter codes and full labels — map + dedupe for display
+function languageLabels(codes: string[] | null | undefined): string {
+  return Array.from(new Set(
+    (codes ?? []).map(c => LANGUAGES.find(l => l.code === c)?.label ?? c)
+  )).join(', ')
+}
 
 type Step = 1 | 2 | 3
 
@@ -54,12 +62,26 @@ function BookAppointmentInner() {
   const [type, setType] = useState<'F2F' | 'TELECONSULT'>('F2F')
   const [loading, setLoading] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [isAuthed, setIsAuthed] = useState<boolean | null>(null)
+  const [pendingSlot, setPendingSlot] = useState<string | null>(null)
   const searchParams = useSearchParams()
 
-  // Pre-select a doctor when arriving from /doctor/[id] profile page
+  // Know whether the visitor is signed in (guests may browse; sign-in required to book)
+  useEffect(() => {
+    getSupabaseClient().auth.getUser().then(({ data: { user } }) => setIsAuthed(!!user))
+  }, [])
+
+  // Pre-select a doctor when arriving from /doctor/[id] profile page,
+  // and restore date/slot/type when returning from login/registration.
   useEffect(() => {
     const doctorId = searchParams.get('doctor')
     if (!doctorId) return
+    const date = searchParams.get('date')
+    const slot = searchParams.get('slot')
+    const t = searchParams.get('type')
+    if (date) setSelectedDate(date)
+    if (slot) setPendingSlot(slot)
+    if (t === 'TELECONSULT' || t === 'F2F') setType(t)
     const supabase = getSupabaseClient()
     supabase
       .from('doctor')
@@ -109,17 +131,44 @@ function BookAppointmentInner() {
       .eq('appointment_date', selectedDate)
       .neq('status', 'CANCELLED')
     setBookedSlots((booked ?? []).map(b => b.start_time))
-    setSlots(generateSlots(avail ?? [], selectedDate))
+    const generated = generateSlots(avail ?? [], selectedDate)
+    setSlots(generated)
+
+    // Returning from login: re-select the slot they had picked and go to Confirm
+    if (pendingSlot) {
+      const match = generated.find(sl => sl.start_time === pendingSlot)
+      setPendingSlot(null)
+      if (match && !(booked ?? []).some(b => b.start_time === match.start_time)) {
+        setSelectedSlot(match)
+        setStep(3)
+      }
+    }
   }
 
   useEffect(() => { loadSlots() }, [selectedDoctor, selectedDate]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Where to come back to after signing in — full booking context preserved
+  function resumeUrl() {
+    if (!selectedDoctor || !selectedSlot) return '/appointments/new'
+    const q = new URLSearchParams({
+      doctor: selectedDoctor.id,
+      date: selectedSlot.date,
+      slot: selectedSlot.start_time,
+      type,
+    })
+    return `/appointments/new?${q.toString()}`
+  }
+
+  function goToLogin() {
+    router.push(`/auth/login?redirect=${encodeURIComponent(resumeUrl())}`)
+  }
 
   async function confirmBooking() {
     if (!selectedSlot || !selectedDoctor) return
     setLoading(true)
     const supabase = getSupabaseClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/auth/login'); return }
+    if (!user) { goToLogin(); return }
     const { data: patient } = await supabase.from('patient').select('id').eq('auth_user_id', user.id).single()
     if (!patient) { setLoading(false); return }
 
@@ -159,7 +208,9 @@ function BookAppointmentInner() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b px-6 py-4 flex items-center gap-3">
-        <a href="/dashboard/patient" className="text-gray-400 hover:text-gray-600 text-sm">← Dashboard</a>
+        <a href={isAuthed ? '/dashboard/patient' : '/'} className="text-gray-400 hover:text-gray-600 text-sm">
+          {isAuthed ? '← Dashboard' : '← Home'}
+        </a>
         <span className="font-semibold text-gray-900">Book Appointment</span>
       </header>
 
@@ -179,6 +230,15 @@ function BookAppointmentInner() {
       </div>
 
       <main className="max-w-3xl mx-auto p-6 space-y-4">
+        {isAuthed === false && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            You&apos;re browsing as a guest. You can search doctors and view slots — we&apos;ll ask you to{' '}
+            <a href={`/auth/login?redirect=${encodeURIComponent('/appointments/new')}`} className="underline font-medium">sign in</a>
+            {' '}or{' '}
+            <a href={`/auth/register?redirect=${encodeURIComponent('/appointments/new')}`} className="underline font-medium">register</a>
+            {' '}before confirming a booking.
+          </div>
+        )}
         {step === 1 && (
           <div className="card p-6 space-y-4">
             <h2 className="font-semibold text-gray-900">Choose AYUSH specialization</h2>
@@ -236,7 +296,7 @@ function BookAppointmentInner() {
                       {SPECIALIZATIONS.find(s => s.code === doc.ayush_specialization)?.label ?? doc.ayush_specialization}
                     </p>
                     <p className="text-xs text-gray-500">{doc.years_of_experience}yr exp</p>
-                    <p className="text-xs text-gray-400 mt-1">{(doc.languages_spoken ?? []).join(', ')}</p>
+                    <p className="text-xs text-gray-400 mt-1">{languageLabels(doc.languages_spoken)}</p>
                   </div>
                   <div className="text-right">
                     {doc.teleconsult_enabled && (
@@ -298,9 +358,25 @@ function BookAppointmentInner() {
                   </div>
                 )}
 
-                {selectedSlot && (
+                {selectedSlot && (isAuthed ? (
                   <button onClick={() => setStep(3)} className="btn-primary w-full">Confirm slot →</button>
-                )}
+                ) : (
+                  <div className="space-y-2">
+                    <button onClick={goToLogin} className="btn-primary w-full">
+                      Sign in to confirm this slot →
+                    </button>
+                    <p className="text-xs text-gray-400 text-center">
+                      First time here?{' '}
+                      <a
+                        href={`/auth/register?redirect=${encodeURIComponent(resumeUrl())}`}
+                        className="text-brand-600 underline"
+                      >
+                        Create a free account
+                      </a>
+                      {' '}— your selected slot will be kept.
+                    </p>
+                  </div>
+                ))}
               </div>
             )}
           </div>

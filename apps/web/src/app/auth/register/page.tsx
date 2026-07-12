@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import PatientRegisterForm from '@/components/forms/PatientRegisterForm'
 import DoctorRegisterForm from '@/components/forms/DoctorRegisterForm'
@@ -22,6 +22,12 @@ const ROLES = [
 ]
 
 export default function RegisterPage() {
+  // Optional ?redirect= passthrough (guest booking flow)
+  const [redirectTo, setRedirectTo] = useState('')
+  useEffect(() => {
+    const r = new URLSearchParams(window.location.search).get('redirect') ?? ''
+    if (r.startsWith('/') && !r.startsWith('//')) setRedirectTo(r)
+  }, [])
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
 
   if (selectedRole === 'patient') return <PatientRegisterForm onBack={() => setSelectedRole(null)} />
@@ -59,7 +65,7 @@ export default function RegisterPage() {
 
         <p className="text-center text-sm text-gray-500 mt-6">
           Already have an account?{' '}
-          <Link href="/auth/login" className="text-brand-600 font-medium hover:underline">Sign in</Link>
+          <Link href={redirectTo ? `/auth/login?redirect=${encodeURIComponent(redirectTo)}` : '/auth/login'} className="text-brand-600 font-medium hover:underline">Sign in</Link>
         </p>
 
         <p className="text-center text-xs text-gray-400 mt-4">
