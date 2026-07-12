@@ -63,7 +63,9 @@ export default function RegisterPage() {
         </p>
 
         <p className="text-center text-xs text-gray-400 mt-4">
-          Hospital / Receptionist accounts are created by your Hospital Admin.
+          Receptionist accounts are created by your Hospital Admin.{' '}
+          Running a hospital or clinic?{' '}
+          <Link href="/hospital/register" className="text-brand-600 underline">Register your hospital</Link>.
         </p>
 
         <p className="text-center text-xs text-gray-400 mt-4">

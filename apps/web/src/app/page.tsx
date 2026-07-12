@@ -28,8 +28,14 @@ export default function Home() {
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
           <Link
-            href="/auth/register"
+            href="/doctors/browse"
             className="bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3.5 px-8 rounded-xl text-center transition-colors shadow-sm"
+          >
+            Find a practitioner
+          </Link>
+          <Link
+            href="/auth/register"
+            className="bg-white hover:bg-gray-50 text-gray-800 font-semibold py-3.5 px-8 rounded-xl text-center border border-gray-300 transition-colors"
           >
             Get started — it&apos;s free
           </Link>
