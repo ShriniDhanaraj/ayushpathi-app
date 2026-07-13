@@ -33,11 +33,11 @@ const config: Config = {
         ivory: '#FAF7F0',
         // AYUSH specialization tints (badges/chips only)
         spec: {
-          'ayu-bg': '#FDF3DC', 'ayu-text': '#5C4510',
-          'yog-bg': '#F4EDDF', 'yog-text': '#584A2C',
-          'una-bg': '#E9F1E2', 'una-text': '#38511F',
-          'sid-bg': '#F8E9E0', 'sid-text': '#733D20',
-          'hom-bg': '#EBE9F4', 'hom-text': '#3E3564',
+          'ayu-bg': '#FDF3DC', 'ayu-text': '#5C4510', 'ayu-border': '#E3CFA0',
+          'yog-bg': '#F4EDDF', 'yog-text': '#584A2C', 'yog-border': '#D9CBAF',
+          'una-bg': '#E9F1E2', 'una-text': '#38511F', 'una-border': '#BFD4AE',
+          'sid-bg': '#F8E9E0', 'sid-text': '#733D20', 'sid-border': '#E0BCA6',
+          'hom-bg': '#EBE9F4', 'hom-text': '#3E3564', 'hom-border': '#C2BDDE',
         },
       },
       fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },

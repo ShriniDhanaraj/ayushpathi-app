@@ -2,11 +2,11 @@ import Link from 'next/link'
 
 export default function Home() {
   const features = [
-    { icon: '🌿', title: 'Ayurveda', desc: 'Ancient wisdom for holistic healing' },
-    { icon: '🧘', title: 'Yoga & Naturopathy', desc: 'Mind-body balance and natural cures' },
-    { icon: '🌙', title: 'Unani', desc: 'Greco-Arabic tradition of medicine' },
-    { icon: '⚕️', title: 'Siddha', desc: 'South Indian classical medicine system' },
-    { icon: '💊', title: 'Homeopathy', desc: 'Like cures like, minimal doses' },
+    { icon: '🌿', title: 'Ayurveda', desc: 'Ancient wisdom for holistic healing', color: 'bg-spec-ayu-bg border-spec-ayu-border text-spec-ayu-text' },
+    { icon: '🧘', title: 'Yoga & Naturopathy', desc: 'Mind-body balance and natural cures', color: 'bg-spec-yog-bg border-spec-yog-border text-spec-yog-text' },
+    { icon: '🌙', title: 'Unani', desc: 'Greco-Arabic tradition of medicine', color: 'bg-spec-una-bg border-spec-una-border text-spec-una-text' },
+    { icon: '⚕️', title: 'Siddha', desc: 'South Indian classical medicine system', color: 'bg-spec-sid-bg border-spec-sid-border text-spec-sid-text' },
+    { icon: '💊', title: 'Homeopathy', desc: 'Like cures like, minimal doses', color: 'bg-spec-hom-bg border-spec-hom-border text-spec-hom-text' },
   ]
 
   return (
@@ -52,9 +52,9 @@ export default function Home() {
       <div className="max-w-3xl mx-auto px-6 pb-10">
         <div className="flex flex-wrap gap-2 justify-center">
           {features.map(f => (
-            <div key={f.title} className="flex items-center gap-2 bg-white border border-gray-200 rounded-full px-4 py-2 shadow-sm">
+            <div key={f.title} className={`flex items-center gap-2 border rounded-full px-4 py-2 shadow-sm ${f.color}`}>
               <span>{f.icon}</span>
-              <span className="text-sm font-medium text-gray-700">{f.title}</span>
+              <span className="text-sm font-medium">{f.title}</span>
             </div>
           ))}
         </div>
