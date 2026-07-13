@@ -141,7 +141,7 @@ export default function NearMePage() {
                 <button key={s.code + '_spec'} onClick={() => setSpec(s.code)}
                   className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
                     spec === s.code
-                      ? 'bg-brand-600 border-brand-600 text-white'
+                      ? 'bg-accent-500 border-accent-500 text-white'
                       : 'bg-white border-gray-300 text-gray-600 hover:border-brand-400'
                   }`}>{s.label}</button>
               ))}
@@ -328,7 +328,7 @@ export default function NearMePage() {
                         <span key={code}
                           className={`text-xs px-2 py-0.5 rounded-full border ${
                             code === langFilter
-                              ? 'bg-brand-600 text-white border-brand-600'
+                              ? 'bg-accent-500 text-white border-accent-500'
                               : 'bg-gray-50 text-gray-500 border-gray-200'
                           }`}>
                           {LANGUAGES.find(l => l.code === code)?.nativeLabel ?? code}

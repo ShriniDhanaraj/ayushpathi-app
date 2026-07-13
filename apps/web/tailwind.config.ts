@@ -4,18 +4,41 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Herbal green — brand/structure (aligned with Ministry of Ayush green)
         brand: {
-          50:  '#f0fdf4',
-          100: '#dcfce7',
-          200: '#bbf7d0',
-          300: '#86efac',
-          500: '#22c55e',
-          600: '#16a34a',
-          700: '#15803d',
-          800: '#166534',
-          900: '#14532d',
+          50:  '#EFF5F0',
+          100: '#DCE8DF',
+          200: '#BDD3C3',
+          300: '#93B49D',
+          400: '#6B9378',
+          500: '#4F7F60',
+          600: '#3E6B4F',
+          700: '#33573F',
+          800: '#2A4634',
+          900: '#1F3527',
         },
-        accent: { 500: '#f59e0b', 600: '#d97706' },
+        // Saffron — key accent, owns all primary actions
+        accent: {
+          50:  '#FDF4E7',
+          100: '#FBE3C8',
+          200: '#F6C88F',
+          300: '#F0A952',
+          400: '#EC9A3F',
+          500: '#E88A2D',
+          600: '#D97A1E',
+          700: '#B36217',
+          800: '#8A4A12',
+          900: '#5C300C',
+        },
+        ivory: '#FAF7F0',
+        // AYUSH specialization tints (badges/chips only)
+        spec: {
+          'ayu-bg': '#FDF3DC', 'ayu-text': '#5C4510',
+          'yog-bg': '#F4EDDF', 'yog-text': '#584A2C',
+          'una-bg': '#E9F1E2', 'una-text': '#38511F',
+          'sid-bg': '#F8E9E0', 'sid-text': '#733D20',
+          'hom-bg': '#EBE9F4', 'hom-text': '#3E3564',
+        },
       },
       fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
     },

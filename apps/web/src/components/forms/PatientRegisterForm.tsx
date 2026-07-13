@@ -253,7 +253,7 @@ export default function PatientRegisterForm({ onBack }: { onBack: () => void }) 
             </div>
             <div className="h-1.5 bg-gray-200 rounded-full">
               <div
-                className="h-1.5 bg-brand-600 rounded-full transition-all duration-300"
+                className="h-1.5 bg-accent-500 rounded-full transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -294,7 +294,7 @@ export default function PatientRegisterForm({ onBack }: { onBack: () => void }) 
                       onClick={() => set('gender', val)}
                       className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
                         form.gender === val
-                          ? 'bg-brand-600 border-brand-600 text-white'
+                          ? 'bg-accent-500 border-accent-500 text-white'
                           : 'bg-white border-gray-300 text-gray-700 hover:border-brand-400'
                       }`}>
                       {lbl}
@@ -364,7 +364,7 @@ export default function PatientRegisterForm({ onBack }: { onBack: () => void }) 
                       onClick={() => toggleConsent(ch)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                         form.communication_consent.includes(ch)
-                          ? 'bg-brand-600 border-brand-600 text-white'
+                          ? 'bg-accent-500 border-accent-500 text-white'
                           : 'bg-white border-gray-300 text-gray-600 hover:border-brand-400'
                       }`}>
                       {ch}
@@ -491,7 +491,7 @@ export default function PatientRegisterForm({ onBack }: { onBack: () => void }) 
                         onClick={() => toggleKnownLang(l.code)}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                           selected
-                            ? 'bg-brand-600 border-brand-600 text-white'
+                            ? 'bg-accent-500 border-accent-500 text-white'
                             : 'bg-white border-gray-300 text-gray-600 hover:border-brand-400'
                         }`}
                       >

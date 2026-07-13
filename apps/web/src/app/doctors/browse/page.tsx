@@ -19,11 +19,11 @@ const SPEC_LABELS: Record<string, string> = {
   UNA: 'Unani', SID: 'Siddha', HOM: 'Homeopathy',
 }
 const SPEC_COLORS: Record<string, string> = {
-  AYU: 'bg-green-100 text-green-700',
-  YOG: 'bg-blue-100 text-blue-700',
-  UNA: 'bg-purple-100 text-purple-700',
-  SID: 'bg-orange-100 text-orange-700',
-  HOM: 'bg-pink-100 text-pink-700',
+  AYU: 'bg-spec-ayu-bg text-spec-ayu-text',
+  YOG: 'bg-spec-yog-bg text-spec-yog-text',
+  UNA: 'bg-spec-una-bg text-spec-una-text',
+  SID: 'bg-spec-sid-bg text-spec-sid-text',
+  HOM: 'bg-spec-hom-bg text-spec-hom-text',
 }
 const LANG_LABELS: Record<string, string> = {
   EN: 'English', TA: 'Tamil', HI: 'Hindi', TE: 'Telugu',

@@ -10,7 +10,7 @@ export default function Home() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-50 via-white to-white">
+    <div className="min-h-screen bg-gradient-to-b from-brand-50 via-ivory to-ivory">
       {/* Hero */}
       <div className="max-w-2xl mx-auto px-6 pt-16 pb-10 text-center">
         <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600 rounded-2xl mb-6 shadow-lg">
@@ -29,7 +29,7 @@ export default function Home() {
         <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
           <Link
             href="/doctors/browse"
-            className="bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3.5 px-8 rounded-xl text-center transition-colors shadow-sm"
+            className="bg-accent-500 hover:bg-accent-600 text-white font-semibold py-3.5 px-8 rounded-xl text-center transition-colors shadow-sm"
           >
             Find a practitioner
           </Link>

@@ -219,8 +219,8 @@ function BookAppointmentInner() {
           {['Find Doctor', 'Pick Slot', 'Confirm'].map((label, i) => (
             <div key={label} className="flex items-center gap-2">
               <div className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${
-                step > i + 1 ? 'bg-brand-600 text-white' :
-                step === i + 1 ? 'bg-brand-600 text-white ring-4 ring-brand-100' :
+                step > i + 1 ? 'bg-accent-500 text-white' :
+                step === i + 1 ? 'bg-accent-500 text-white ring-4 ring-accent-100' :
                 'bg-gray-200 text-gray-500'
               }`}>{step > i + 1 ? '✓' : i + 1}</div>
               <span className={`text-sm ${step === i + 1 ? 'text-brand-700 font-medium' : 'text-gray-400'}`}>{label}</span>

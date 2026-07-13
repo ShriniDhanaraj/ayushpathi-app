@@ -222,7 +222,7 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
               <span>{Math.round(progress)}%</span>
             </div>
             <div className="h-1.5 bg-gray-200 rounded-full">
-              <div className="h-1.5 bg-brand-600 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+              <div className="h-1.5 bg-accent-500 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
             </div>
           </div>
         </div>
@@ -251,7 +251,7 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
                   {[['M', T.genderMale], ['F', T.genderFemale], ['U', T.genderOther]].map(([val, lbl]) => (
                     <button key={val} type="button" onClick={() => set('gender', val)}
                       className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                        form.gender === val ? 'bg-brand-600 border-brand-600 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-brand-400'
+                        form.gender === val ? 'bg-accent-500 border-accent-500 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-brand-400'
                       }`}>{lbl}</button>
                   ))}
                 </div>
@@ -280,7 +280,7 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
                   {SPECIALIZATIONS.map(s => (
                     <button key={s.code} type="button" onClick={() => set('ayush_specialization', s.code)}
                       className={`py-2 px-3 rounded-lg border text-sm font-medium transition-colors text-left ${
-                        form.ayush_specialization === s.code ? 'bg-brand-600 border-brand-600 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-brand-400'
+                        form.ayush_specialization === s.code ? 'bg-accent-500 border-accent-500 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-brand-400'
                       }`}>{s.label}</button>
                   ))}
                 </div>
@@ -291,7 +291,7 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
                   {DEGREES.map(d => (
                     <button key={d} type="button" onClick={() => toggleDegree(d)}
                       className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                        form.degrees.includes(d) ? 'bg-brand-600 border-brand-600 text-white' : 'bg-white border-gray-300 text-gray-600 hover:border-brand-400'
+                        form.degrees.includes(d) ? 'bg-accent-500 border-accent-500 text-white' : 'bg-white border-gray-300 text-gray-600 hover:border-brand-400'
                       }`}>{d}</button>
                   ))}
                 </div>
@@ -351,7 +351,7 @@ export default function DoctorRegisterForm({ onBack }: { onBack: () => void }) {
                         onClick={() => toggleConsultLang(l.code)}
                         className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                           selected
-                            ? 'bg-brand-600 border-brand-600 text-white'
+                            ? 'bg-accent-500 border-accent-500 text-white'
                             : 'bg-white border-gray-300 text-gray-600 hover:border-brand-400'
                         }`}
                       >
