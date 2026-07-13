@@ -6,8 +6,8 @@ import {
 } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { supabase } from './lib/supabase'
-import { resolveAndOpenSupportWA } from './lib/whatsapp'
+import { supabase } from '../lib/supabase'
+import { resolveAndOpenSupportWA } from '../lib/whatsapp'
 import * as ImagePicker from 'expo-image-picker'
 import * as DocumentPicker from 'expo-document-picker'
 

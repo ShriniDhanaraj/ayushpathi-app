@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import { supabase } from './lib/supabase'
+import { supabase } from '../lib/supabase'
 
 interface Prescription {
   id: string
